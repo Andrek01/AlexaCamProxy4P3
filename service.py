@@ -166,6 +166,8 @@ class listenProxy(threading.Thread):
         self.proxy_credentials=proxy_credentials
         self.proxy_auth_type=proxy_auth_type
         self.nonce = hashlib.sha1(str(random()).encode()).hexdigest()
+        self.user = self.proxy_credentials.split(':')[0] 
+        self.pwd = self.proxy_credentials.split(':')[1]
         
 
 
@@ -554,7 +556,7 @@ class listenProxy(threading.Thread):
             key=key.strip()
             PropValues[key]= value
              
-        PropValues['password']= '8x+0bzT9'
+        PropValues['password']= self.pwd
         if AuthorizationType.upper() == 'DIGEST':
             myResponse = self.CalcHttpDigest(PropValues["qop"],
                                              PropValues["realm"],
