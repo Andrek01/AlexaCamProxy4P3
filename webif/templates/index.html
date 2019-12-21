@@ -1,0 +1,362 @@
+<!-- Functions in Scripts       -->
+<script src="./static/js/thread_items.js"></script>
+<!-- Functions in Scripts       -->
+{% extends "base_plugin.html" %}
+
+{% set logo_frame = false %}
+{% set use_bodytabs = true %}
+{% set tabcount = 4 %}
+{% set tab1title = 'Settings / Cam-Info' %}
+{% set tab2title = 'Communication-Log' %}
+{% set tab3title = 'active Camera Thread´s' %}
+{% set tab4title = 'SSL Certificate Info´s' %}
+
+
+{% block headtable %}
+<table class="table table-striped table-hover">
+	<tbody>
+		<tr>
+			<td class="py-1"><strong>Proxied Cameras / Standard TLSv1.2 Cameras</strong></td>
+			<td align="right" class="py-1">{{ proxied_Cams }} / {{ standard_Cams }}</td>
+		</tr>
+
+		<tr>
+			<td class="py-1"><strong>Your Public IP</strong></td>
+			<td align="right" class="py-1">{{ publicIP }}</td>
+		</tr>
+		<tr>
+			<td class="py-1"><strong>Proxy-Credentials</strong></td>
+			<td align="right" class="py-1">{{ proxyCredentials }}</td>
+		</tr>
+		<tr>
+			<td class="py-1"><strong>Proxy-Authorisierung</strong></td>
+			<td align="right" class="py-1">{{ proxy_auth_type }}</td>
+		</tr>
+
+	</tbody>
+</table>
+{% endblock headtable %}
+
+{% block buttons %}
+{% endblock buttons %}
+
+{% set tabcount = 4 %}
+
+{% block bodytab1 %}
+<!--Start of Settings-->
+<div class="table-responsive" style="margin-left: 2px; margin-right: 2px; margin-bottom: 5px;margin-top: 5px;" class="row">
+	<table class="table table-striped table-hover">
+			<tr style="height: 10px;font-size: 12px" valign = "middle">
+				<td style="width: 10%; vertical-align:middle;align:left">Credentials:</td>
+				<td style="width: 15%" valign = "middle" align="left">
+			          <input type="input" style="margin-bottom: 1px; margin-left: 5px; width: 100%;font-size: 12px" class="form-control" name="txtUser" id="txtUser" placeholder="{{ _('Proxy-User') }}" value="">			
+				</td>
+				<td style="width: 10%" valign = "middle" align="left">
+			          <input type="input" style="margin-bottom: 1px; margin-left: 5px; width: 100%;font-size: 12px" class="form-control" name="txtPwd" id="txtPwd" placeholder="{{ _('Password') }}" value="">			
+				</td>
+				<td style="width: 10%; vertical-align:middle;align:left">
+				<div class="custom-control custom-checkbox" style =" vertical-align:middle;align:left">
+				    <input type="checkbox" class="custom-control-input" id="store_2_config" name="store_2_config">
+				    <label class="custom-control-label" for="store_2_config">Store to Config</label>
+				</div>
+                </td>
+                <td style="width:10%">
+			          <button type="button" onclick="BtnEncode()"style="margin-left : 5px" class="btn btn-shng btn-sm" value="btnEncode" id="btnEncode">&nbsp;{{ _('Encode') }}</button>
+                <td>
+				<td style="width: 10%; vertical-align:middle;align:left">encoded Cred.:
+                </td>
+                <td style="width: 45%; vertical-align:middle;align:left">
+			          <input type="input" style="margin-bottom: 1px; margin-left: 5px; width: 100%;font-size: 12px" class="form-control" name="txtEncoded" id="txtEncoded" placeholder="{{ _('Encoded Credentials') }}" value="">			
+				</td>
+			</tr>
+            <tr>
+				<td style="width: 10%" valign = "middle" align="left"><strong>Result :</strong></td>
+				<td colspan="7" style="width: 75%;margin-top: 5px;margin-bottom: 5px; margin-left : 5px;margin-right: 5px; height : 50px;font-size: 12px;" valign = "middle" align="left">
+
+					<textarea type="input" rows="5" style="width: 100%;height: 100%;font-size: 12px;" class="form-control" name="txt_Result" id="txt_Result" placeholder="{{ _('...') }}" disabled >{{ txt_Result }}</textarea>
+
+				</td>
+			</tr>
+            <tr>
+				<td colspan="2" style="width: 10%; vertical-align:middle" align="left"><strong>Video-Buffer-Size : :</strong></td>
+				<td style="width: 15%" valign = "middle" align="left">
+			          <input type="input" style="margin-bottom: 1px; margin-left: 5px; width: 100%;font-size: 12px" class="form-control" name="txtUser" id="txtUser" placeholder="{{ _('bytes') }}" value={{ video_buffer }}>			
+				</td>
+				<td colspan="2" style="width: 10%; vertical-align:middle" valign = "middle" align="left"><strong>Authorization :</strong></td>
+                <td>
+                    <select name="authorization_1" id="authorization_1" style="width:100px; vertical-align:middle">
+                      <option value="NONE">NONE</option>
+                      <option value="BASIC">BASIC</option>
+                      <option value="DIGEST">DIGEST</option>
+                    </select>
+                </td>
+        <td colspan="2">
+        	<button id="btn_clear_proto_states" class="btn btn-shng btn-sm" name="btn_clear_proto_states" value="on" onclick="CommitValues(this.name)"><i class="fas fa-satellite-dish"></i>&nbsp;&nbsp;&nbsp;Commit Changes&nbsp;</button>
+        </td>
+            </tr>
+
+
+	</table>
+
+</div>
+<!--End of Settings-->
+<div class="table-responsive" style="margin-left: 2px; margin-right: 2px;" class="row">
+<strong><font size="+2"> Proxied Cams</font></strong>
+        <div class="col-sm-12">
+           <table class="table table-striped table-hover pluginList">
+			<thead>
+				<tr>
+					<th>{{ _('Alexa-Item') }}</th>
+                        		<th style="width: 200;"><font size="-1">{{ _('Proxy-URL') }}</th>
+					<th style="width: 200;"><font size="-1">{{ 'Real-URL´s' }}</th>
+					<th><font size="-1">MB proxied total</th>
+					<th><font size="-1">last Session</th>
+					<th><font size="-1">last Session duration</th>
+					<th><font size="-1">Sessions total</th>
+					</tr>
+			</thead>
+			<tbody>
+			{% for item in items_proxied %}
+				<tr>
+
+					<td class="py-1"><font size="-1">{{ item.name }}</td>
+					<td class="py-1"><font size="-1">{{ item.proxied_Url }}</td>					
+					<td class="py-1"><font size="-1">{{ item.real_Url }}</td>					
+					<td align="right" class="py-1"><font size="-1">{{ item.proxied_mb_total }}</td>
+					<td align="right" class="py-1"><font size="-1">{{ item.last_Session }}</td>					
+					<td align="right" class="py-1"><font size="-1">{{ item.last_Session_duration }}</td>					
+					<td align="right" +class="py-1"><font size="-1">{{ item.Sessions_total }}</td>					
+					
+					
+					
+				</tr>
+			{% endfor %}
+			</tbody>
+		        </table>
+        </div>
+</div>
+<strong><font size="+2">Standard TLS-Cams</font></strong>
+<div class="table-responsive" style="margin-left: 2px; margin-right: 2px;" class="row">
+	<div class="col-sm-12">
+                        <table class="table table-striped table-hover pluginList">
+			<thead>
+				<tr>
+					<th>{{ _('Alexa-Item') }}</th>
+					<th style="width: 200;">{{ 'Real-URL' }}</th>
+					</tr>
+			</thead>
+			<tbody>
+			{% for item in item_tls %}
+				<tr>
+					<td class="py-1">{{ item.conf['alexa_description'] }}</td>
+					<td class="py-1">{{ item.conf['alexa_csc_uri'] }}</td>
+				</tr>
+			{% endfor %}
+			</tbody>
+		        </table>
+        </div>
+</div>
+{% endblock bodytab1 %}
+
+{% block bodytab2 %}
+
+<table class="table table-striped table-hover">
+	<tbody>
+    <tr>
+        <td>
+        	<button id="btn_clear_proto_states" class="btn btn-shng btn-sm" name="btn_clear_proto_states" value="on" onclick="DeleteProto(this.name)"><i class="fas fa-trash-alt"></i>&nbsp;&nbsp;&nbsp;delete Protocol&nbsp;</button>
+        </td>
+        <td>
+            <div class="custom-control custom-checkbox" style =" vertical-align:middle;align:left">
+                <input type="checkbox" class="custom-control-input" id="proto_states_check" name="proto_states_check">
+                <label class="custom-control-label" for="proto_states_check">Auto Update ( 2 Sek.)</label>
+            </div>
+        </td>
+    </tr>
+    </tbody>
+</table>
+<div class="container-fluid" style="overflow: none; border-left: 1px solid #ccc;height: 60%">
+    <div style="margin-bottom: 10px;height: 100%">
+
+
+        {% if state_log_lines %}<textarea style="height: 100%" autocomplete="off" id="state_log_file" name="state_log_file">{% for line in state_log_lines %}{% if not loop.last %}{{ line }}{% else %}{{ line  | replace('\n', '') }}{% endif %}{% endfor %}</textarea>{% else %}{{ _('no data available') }}{% endif %}
+    </div>
+</div>
+<div class="container-fluid">
+    <table>
+        <tr>
+           <td Hinweis>
+        </tr>   
+    </table>
+</div>
+
+<script type="text/javascript" language="javascript">
+var statelogCodeMirror = CodeMirror.fromTextArea(document.getElementById("state_log_file"),
+ {
+    lineNumbers: true,
+    readOnly: true,
+    indentUnit: 4,
+    lineSeparator: '\n',
+    mode: 'ttcn',
+    lineWrapping: false,
+    indentWithTabs: false,
+    autoRefresh : true
+});
+
+window.addEventListener("resize", function(){resizeCodeMirror(statelogCodeMirror, 10)}, false);
+resizeCodeMirror(statelogCodeMirror, 10);
+statelogCodeMirror.refresh();
+console.log ("refreshed CodeMirror StateLog")
+
+$('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+  var target = $(e.target).attr("href") // activated tab
+  if (target == "#bodytab_2")
+        { statelogCodeMirror.refresh(); }
+
+});
+
+</script>
+{% endblock bodytab2 %}
+
+{% block bodytab3 %}
+<div class="table-responsive" style="margin-left: 2px; margin-right: 2px;" class="row">
+	<div class="col-sm-12">
+                <div class="row">
+                    <div class="col" style="max-width: 50%;">
+                        <div class="card">
+                            <div class="card-header p-1 shng_heading">
+                                <a class="float-sm-right" href="#" onclick="reloadThreads();" title="{{ _('Neu Laden', 'button') }}"><span id="refresh-element" class="fas fa-sync"></span></a>
+                                <strong>{{ _('Threads existing ...') }}</strong>
+                            </div>
+                            <div class="card-body p-1">
+                                <div class="card-text" style="">
+                                    <div id="cardOverlay" class="cardOverlay">
+                                        <div style="position: relative; top: 45%; left:45%;">
+                                            <span id="reload-element" class="fas fa-sync fa-4x"/>
+                                        </div>
+                                    </div>
+                                    <div id="threads" class="data-container refresh-data pre-scrollable" style="overflow-x: auto;">
+                                    {{ _('Threads.....') }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col" style="max-width: 50%;">
+                        <div class="card" >
+                            <div class="card-header p-1 shng_heading">
+				<table>
+				<tr>
+
+				<strong align="left">{{ _('Thread-Details') }}</strong>
+
+
+
+
+
+                                <a class="float-sm-right" align="right" href="#" onclick="SelectListItem(actThreadName);" title="{{ _('Neu Laden', 'button') }}"><span id="refresh-element_details" class="fas fa-sync"></span></a>
+
+                            </tr>
+                            </table>
+			    </div>
+                            <div class="card-body p-1" style="position: relative;">
+                                <div class="card-text" style="">
+                                    <div id="cardOverlay_Details" class="cardOverlay_Details">
+                                        <div style="position: relative; top: 45%; left:45%;">
+                                            <span id="reload-element_details" class="fas fa-sync fa-4x"/>
+                                        </div>
+                                    </div>
+                                    <div id="thread_details" class="data-container refresh-data pre-scrollable" style="overflow-x: auto;">
+                                    {{ _('Details.....') }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+
+    </div>
+</div>
+<!-- Functions in Scripts       -->
+<script type="text/javascript" language="javascript">
+
+var actThreadName;
+
+reloadThreads();
+SelectListItem(actThreadName);
+
+$('#threads').on('click', 'tr', function()
+  {
+   var value = $(this).closest('tr').find('td').first().text();
+   //alert(value);
+   actThreadName = value;
+   SelectListItem(actThreadName);
+  });
+
+
+
+</script>
+{% endblock bodytab3 %}
+
+{% block bodytab4 %}
+<div class="table-responsive" style="margin-left: 2px; margin-right: 2px;" class="row">
+	<div class="col-sm-12">
+                <table class="table table-striped table-hover">
+	                <tbody>
+		                <tr>
+			                <td class="py-1"><strong>Certificate issued for :</strong></td>
+			                <td class="py-1" style="width: 70%;">{{ cert_issued_to }}</td>
+		                </tr>
+		                <tr>
+			                <td class="py-1"><strong>Certificate issued by :</strong></td>
+			                <td class="py-1">{{ cert_issued_by }}</td>
+		                </tr>
+		                <tr>
+			                <td class="py-1"><strong>Certificate valid since :</strong></td>
+			                <td class="py-1">{{ cert_notBefore }}</td>
+		                </tr>
+                                <tr>
+			                <td class="py-1"><strong>Certificate valid till :</strong></td>
+			                <td class="py-1">{{ cert_notafter }}</td>
+		                </tr>
+                                <tr>
+			                <td class="py-1"><strong>supported Ciphers :</strong></td>
+			                <td class="py-1">{{ my_Ciphers }}</td>
+		                </tr>
+	                </tbody>
+                </table>        
+    </div>
+</div>
+{% endblock bodytab4 %}
+
+{% block bodytab5 %}
+<table class="table table-striped table-hover">
+	<tbody>
+		<tr>
+			<td class="py-1"><strong>Proxied Cameras</strong></td>
+			<td align="right" class="py-1">{{ proxied_Cams }}</td>
+		</tr>
+		<tr>
+			<td class="py-1"><strong>Standard TLSv1.2 Cameras</strong></td>
+			<td align="right" class="py-1">{{ standard_Cams }}</td>
+		</tr>
+		<tr>
+			<td class="py-1"><strong>Your Public IP</strong></td>
+			<td align="right" class="py-1">{{ publicIP }}</td>
+		</tr>
+		<tr>
+			<td class="py-1"><strong>Proxy-Credentials</strong></td>
+			<td align="right" class="py-1">{{ proxyCredentials }}</td>
+		</tr>
+		<tr>
+			<td class="py-1"><strong>Proxy-Authorisierung</strong></td>
+			<td align="right" class="py-1">{{ proxy_auth_type }}</td>
+		</tr>
+
+	</tbody>
+</table>
+{% endblock bodytab5 %}
+
+
+<!-- -->

@@ -1,0 +1,75 @@
+# Metadata for the plugin
+plugin:
+    # Global plugin attributes
+    type: web                # plugin type (gateway, interface, protocol, system, web)
+    description:
+        de: 'Plugin zur Anbindung von Kameras an Echo/Fire-Endgeräte mit Bildschirm via TLSv1.2 und Nginx-Zertifikat <br>für Payload V3 mit Alexa4P3-Plugin. Das Plugin arbeitet als Proxy mit SSL-Socket.'
+        en: 'Plugin to connect Cameras to Echo Show/Spot/Fire endpoints with Screens via TLSv1.2 and Nginx-Certificate <br> for Payload V3 with Alexa4P3-Plugin. The Plugin works as Proxy with SSL-Socket.'
+    maintainer: AndreK
+    tester: psilo
+    documentation: https://github.com/Andrek01  # url of documentation (wiki) page    
+    version: 1.0.0                              # Plugin version
+    sh_minversion: 1.5.2                        # minimum shNG version to use this plugin
+    multi_instance: False                       # plugin supports multi instance
+    classname: AlexaCamProxy4P3                 # class containing the plugin
+    keywords: Camera Alexa Show Spot Echo FireTV Amazon SmartHomeSkill CamerastreamController
+    support: https://knx-user-forum.de/forum/supportforen/smarthome-py/1021150-amazon-alexa-plugin
+    state: develop                   # State of the Plugin
+    restartable: True                # Plugin is restartable 
+
+plugin_functions: NONE               # the Plugin provides no public functions
+logic_parameters: NONE               # No logic parameters for this plugin
+item_structs: NONE                   # no item structure needed
+item_attributes: NONE                # No parameters needed, the plugin get it from Alexa4P3 Parameters
+
+parameters:
+    # Definition of parameters to be configured in etc/plugin.yaml
+    port:
+        type: int
+        default: 443
+        description:
+            de: 'Port, für Kommunikation mit den Echo-Endgeräten (muss 443)'
+            en: 'Port to be used when communicating with echo-end-devices (must be 443)'
+    video_buffer:
+        type: int
+        default: 524280
+        description:
+            de: 'Groesse des Video - Transferpuffers von der Kamera zum Echo'
+            en: 'Size of the Video transferbuffer from the camera to the echo'     
+
+    cert_path:
+        type: str
+        default: ''
+        description:
+            de: 'Pfad zum SSL-Zertifikat (fullchain.pem)'
+            en: 'path to the SSL-Certificate (fullchain.pem)'     
+    cert_path_key:
+        type: str
+        default: ''
+        description:
+            de: 'Pfad zum SSL-Key-File (privkey.pem)'
+            en: 'path to the SSL-Key-File (privkey.pem)'
+    proxy_url:
+        type: str
+        default: ''
+        description:
+            de: 'DynDNS URL zur Prüfung der eigenen oeffentlichen IP'
+            en: 'DynDNS Url to verify Access only from the own IP'          
+    path_user_file:
+        type: str
+        default: ''
+        description:
+            de: 'Pfad zur htpasswd-Datei welche beim Zugriff mit BASIC Authorisation verwendet wird'
+            en: 'Path to the htpasswd file which contains the Credentials to access while using BASIC authorization'          
+    proxy_credentials:
+        type: str
+        default: ''
+        description:
+            de: 'Zugangsdaten für den Kamera-Proxy-Server bei Verwendung von Authorisation DIGEST oder BASIC <USER>:<PWD> im Format base64-encoded'
+            en: 'if you want to use DIGEST or BASIC-Authorization you have to enter the credentials here <USER>:<PWD> in format base64-encoded'          
+    proxy_auth_type:
+        type: str
+        default: 'NONE'
+        description:
+            de: 'legt fest mit welcher Authorisierung Zugriff auf den Proxy erfolgen kann [NONE/BASIC/DIGEST]'
+            en: 'if you want to use DIGEST-Authorization you have to enter the credentials here <USER>:<PWD>'          
