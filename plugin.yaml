@@ -72,4 +72,10 @@ parameters:
         default: 'NONE'
         description:
             de: 'legt fest mit welcher Authorisierung Zugriff auf den Proxy erfolgen kann [NONE/BASIC/DIGEST]'
-            en: 'if you want to use DIGEST-Authorization you have to enter the credentials here <USER>:<PWD>'          
+            en: 'if you want to use DIGEST-Authorization you have to enter the credentials here <USER>:<PWD>'
+    onyl_allow_own_IP: 
+        type: bool
+        default: true
+        description:
+            de: 'legt fest ob nur Zugriffe von der eigenen öffentlich IP zulässig sind'
+            en: 'if true only Access from the own public IP is allowed'
