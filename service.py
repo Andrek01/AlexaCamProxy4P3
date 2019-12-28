@@ -24,7 +24,7 @@ from random import random
 
 
 class ThreadedServer(threading.Thread):
-    def __init__(self, logger,port, video_buffer,cert_path,cert_path_key, Cams, ClientThreads,proxyUrl,path_user_file,proxy_credentials,proxy_auth_type):
+    def __init__(self,Proto, logger,port, video_buffer,cert_path,cert_path_key, Cams, ClientThreads,proxyUrl,path_user_file,proxy_credentials,proxy_auth_type,onyl_allow_own_IP):
         threading.Thread.__init__(self)
         self.logger = logger
         self.port = int(port)
@@ -47,6 +47,8 @@ class ThreadedServer(threading.Thread):
         self.path_user_file = path_user_file
         self.proxy_credentials=proxy_credentials
         self.proxy_auth_type=proxy_auth_type
+        self._proto = Proto
+        self.onyl_allow_own_IP = onyl_allow_own_IP
         
         
         
@@ -97,7 +99,8 @@ class ThreadedServer(threading.Thread):
             try:
                 conn = context.wrap_socket(client, server_side=True)
                 # Check if only own IP is allowed
-                if (self.proxyUrl != ''):
+                if (self.onyl_allow_own_IP == True):
+                    reqAdress = None
                     self.myIP = self.GetMyIP(self.proxyUrl)
                     reqAdress = address[0]
                     if self.myIP != reqAdress:
@@ -105,7 +108,7 @@ class ThreadedServer(threading.Thread):
                         client.close()
                         continue
             except Exception as err:
-                self.logger.error("ProxyCam4AlexaP3: SSL-Error - {} ".format(err))
+                self.logger.error("ProxyCam4AlexaP3: SSL-Error - {} peer : {}".format(err,reqAdress))
                 client.shutdown(socket.SHUT_RDWR)
                 client.close()
                 continue
@@ -122,7 +125,7 @@ class ThreadedServer(threading.Thread):
                         except:
                             pass
                         
-                self.ClientThreads.append(listenProxy(conn,address,self.logger,self.Cams,self.video_buffer,self.path_user_file,self.proxy_credentials,self.proxy_auth_type))
+                self.ClientThreads.append(ProxySocket(self._proto,conn,address,self.logger,self.Cams,self.video_buffer,self.path_user_file,self.proxy_credentials,self.proxy_auth_type,self.proxyUrl,self.port))
                 aktThread +=1
                 if aktThread > 99999:
                     aktThread = 1
@@ -131,9 +134,9 @@ class ThreadedServer(threading.Thread):
                 self.ClientThreads[lastAdded].name = NewThreadName
 
                 self.logger.info("ProxyCam4AlexaP3: Added Thread %s" % NewThreadName)
-                self.ClientThreads[lastAdded].daemon = True
+                self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: Added Thread %s" % NewThreadName)
+                #self.ClientThreads[lastAdded].daemon = True
                 self.ClientThreads[lastAdded].start()
-                #self.ClientThreads[lastAdded].join()        ### ?????????????????????????????
 
             except Exception as err:
                 self.logger.info("ProxyCam4AlexaP3: NewThreadError - {}".format(err))
@@ -142,8 +145,8 @@ class ThreadedServer(threading.Thread):
 
             
             
-class listenProxy(threading.Thread):
-    def __init__(self, client, address,logger,cams,videoBuffer=524280, path_User_File = '',proxy_credentials='',proxy_auth_type='NONE'):
+class ProxySocket(threading.Thread):
+    def __init__(self,Proto, client, address,logger,cams,videoBuffer=524280, path_User_File = '',proxy_credentials='',proxy_auth_type='NONE',proxy_Url = None,port=0):
         threading.Thread.__init__(self)
         self.logger = logger
         self.mysocks = []
@@ -168,6 +171,13 @@ class listenProxy(threading.Thread):
         self.nonce = hashlib.sha1(str(random()).encode()).hexdigest()
         self.user = self.proxy_credentials.split(':')[0] 
         self.pwd = self.proxy_credentials.split(':')[1]
+        self.server_auth = False
+        self._proto = Proto
+        self.proxyUrl = proxy_Url
+        self.port = port
+        self.client_last_Cseq = 0
+        self.server_last_Cseq = 1
+        self.authenticate = ""
         
 
 
@@ -189,6 +199,7 @@ class listenProxy(threading.Thread):
         except Exception as err:
             self.logger.debug("ProxyCam4AlexaP3: Cam Thread cannot close Server-socket-{}".format(err))
         self.logger.debug("ProxyCam4AlexaP3: Cam Thread stopped - %s" % txtInfo)
+        self._proto.addEntry('INFO    ','Cam Thread stopped - %s' % txtInfo)
         self.actCam.proxied_bytes +=self.proxied_bytes
         try:
             self.actCam.last_Session_End = datetime.now()
@@ -216,7 +227,6 @@ class listenProxy(threading.Thread):
         AuthResp += 'Server: APC/1.0.0 (Build/489.16; Platform/Linux; Release/Darwin; state/beta; )\r\n'
         AuthResp += 'Cseq: 1\r\n'
         AuthResp += 'WWW-Authenticate: Digest realm="Access2AlexaCam", nonce="'+self.nonce+'"\r\n\r\n'
-        #AuthResp += 'WWW-Authenticate: Digest realm="Access2AlexaCam", nonce="'+self.nonce+'59dd520e1f9132c04ea6a45b80c4e4ed"\r\n\r\n'
        
         return AuthResp
     
@@ -239,6 +249,15 @@ class listenProxy(threading.Thread):
         serverblock = b''
         clientblock = b''
         loopcount =0
+        server_describe = ""
+        
+        
+        if 'NONE' in self.proxy_auth_type:
+            self.Authorization_send = True
+            self.Credentials_Checked = True
+            self._proto.addEntry('INFO    ','Allowed Access without Authorization - NONE')
+            self.logger.debug('Allowed Access without Authorization - NONE')
+
                     
         while self.alive:
             if loopcount==50:
@@ -266,29 +285,81 @@ class listenProxy(threading.Thread):
                                     serverblock += serverdata
                                 if len(serverdata) < BUFF_SIZE_SERVER:
                                     break
+                        
                         if serverblock:
+                            try:
+                                if "\r\n" in serverblock.decode():
+                                    self._proto.addEntry('INFO S>P',serverblock.decode())
+                                    self._proto.addEntry('INFO    ',"Block-length : {}".format(len(serverblock.decode())))
+                            except:
+                                pass
+                            try:
+                                if ( not self.server_auth and "WWW-Authenticate" in serverblock.decode()):
+                                    self._proto.addEntry('INFO S>P',"Got WWW-Authenticate from Camera\r\n"+ serverblock.decode())
+                                    # inject Authorization in server_describe
+                                    if (server_describe != ""):
+                                        myResponse = self.server_add_authorization(serverblock.decode(),server_describe.decode())
+                                        myResponse = self._inject_sequence_no(myResponse.encode(),self.server_last_Cseq)
+                                        self.server_last_Cseq += 1
+                                        self.server.sendall(myResponse)
+                                        self._proto.addEntry('INFO P>S',"Send Authorization to Camera\r\n"+ myResponse.decode())
+                                        self.server_auth = True
+                                        continue
+                                
+                                
+
+                                '''
+                                # Handle different C-Sequences between Client and Server 
+                                if (not self.QSeq_checked and self.server_auth and 'RTSP/1.0 200 OK' in serverblock.decode()):
+                                    self._proto.addEntry('INFO    ',"Start to correct Sequence-count after Authorization")
+                                    self._proto.addEntry('INFO    ',"Original-Block-length : {}".format(len(serverblock.decode())))
+                                    self._proto.addEntry('INFO    ',"Original-Block :\r\n"+serverblock.decode())
+                                    myNewBlock = ""
+                                    for line in serverblock.decode().split("\r\n"):
+                                        if ("CSEQ" in line.upper()):
+                                            line ="CSeq: " + str(int(line.split(":")[1])-1)
+                                        myNewBlock += line +"\r\n"
+                                    
+                                    myNewBlock += "\r\n"
+                                    
+                                    NewServerblock = myNewBlock.encode()
+                                    self._proto.addEntry('INFO    ',"New-Block :\r\n"+NewServerblock.decode())
+                                    self._proto.addEntry('INFO    ',"New-Block-length : {}".format(len(NewServerblock.decode())))
+                                    self._proto.addEntry('INFO    ',"Corrected Sequence-count after Authorization")
+                                    serverblock = NewServerblock
+                                '''
+                            except:
+                                pass
+                                
+                                
+                            
                             # send data from Server to Client
+                            try:
+                                serverblock = self._inject_sequence_no(serverblock, self.client_last_Cseq)
+                                #serverblock = self.DeleteAuthoriziation(serverblock.decode()).encode()
+                                
+                            except:
+                                #self._proto.addEntry('ERROR   ',"ERROR while injecting last client sequence")
+                                pass
+                            
+                            try:
+                                if "\r\n" in serverblock.decode():
+                                    self._proto.addEntry('INFO P>C',serverblock.decode())
+                                    self._proto.addEntry('INFO    ',"Block-length : {}".format(len(serverblock.decode())))
+                            except:
+                                pass
+                            
                             self.client.send(serverblock)
-                            #if len(serverblock)<10000:
-                            #    self.logger.info("Server-sends:{}".format(serverblock.decode()))
+                            
+
                             if self.actCam != None:
                                 try:
                                     self.proxied_bytes += len(serverblock)
                                 except Exception as err:
                                     self.logger.info("Server-Block inconsistent")
-                            '''
-                            self.serversend += 1
-                            if self.serversend == 3:
-                                self.logger.info("ProxyCam4AlexaP3: Time for Stop - three times got Server-Request")
-                                print ("Time for Stop three times got Server-Request")
-                            # That means :
-                            # Cam send -> Describe OK
-                            # Cam send -> Setup
-                            # Cam send -> Play OK
-                            # Now everything should ready to stream to client
-                            '''
-                    except:
-                        self.logger.info("ProxyCam4AlexaP3: Server disconnected right now not connected")
+
+                    except Exception as err:
+                        self.logger.info("ProxyCam4AlexaP3: Server disconnected right now not connected - {}".format(err))
                         pass
                 elif myActSock == self.client:
                     try:
@@ -310,6 +381,12 @@ class listenProxy(threading.Thread):
                         
                         if clientblock:
                             self.logger.debug("ProxyCam4AlexaP3: Client-Message-{}".format(str(clientblock.decode())))
+                            self._proto.addEntry('INFO C>P','Client-Message-{}'.format(str(clientblock.decode())))
+                            try:
+                                self.client_last_Cseq = self._get_sequence_no(clientblock)
+                            except:
+                                pass
+                                
                             if not self.server_url:
                                 try:
                                     try:
@@ -317,47 +394,68 @@ class listenProxy(threading.Thread):
                                     except Exception as err:
                                         self.logger.debug("Error while parsing real URL")
                                     
+                                    
                                     if ('GET' in clientblock.decode() or self.Authorization_send == False):
-                                        if 'DIGEST' in self.actCam.authorization:
-                                            AuthResponse =self.CreateDigestAuthResponse().encode()
+                                        # Keep Describe to Server in mind
+                                        if ('DESCRIBE' in clientblock.decode() and server_describe == ""):
+                                            server_describe = self._inject_sequence_no(clientblock, self.server_last_Cseq)
+                                            server_describe = self.InjectRealUrl(server_describe)
+                                            self._proto.addEntry('INFO    ',"reminded parsed DESCRIBE from Client\r\n"+server_describe.decode())
+                                        
+                                        
+                                        
+                                        if 'DIGEST' in self.proxy_auth_type:
+                                            AuthResponse = self.CreateDigestAuthResponse().encode()
+                                            AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
                                             self.client.sendall(AuthResponse)
                                             self.Authorization_send = True
                                             self.logger.debug(self.CreateDigestAuthResponse())
+                                            self._proto.addEntry('INFO P>C',AuthResponse.decode())
                                             continue
-                                        elif 'BASIC' in self.actCam.authorization:
+                                        elif 'BASIC' in self.proxy_auth_type:
                                             AuthResponse =self.CreateBasicAuthResponse().encode()
+                                            AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
                                             self.client.sendall(AuthResponse)
                                             self.Authorization_send = True
                                             self.logger.debug(self.CreateBasicAuthResponse())
+                                            self._proto.addEntry('INFO P>C',AuthResponse.decode())
                                             continue
-                                        else:
-                                            self.Authorization_send = True
-                                            self.Credentials_Checked = True
-                                            self.logger.debug('Allowed Access without Authorization NONE')
+
                                         
-                                    
                                     # Authorization arrives
-                                    if ('Authorization:' in clientblock.decode()) and not self.Credentials_Checked:
+                                    if ('Authorization:' in clientblock.decode() and not self.Credentials_Checked):
+
                                         self.Credentials_Checked = self.CheckAuthorization(clientblock.decode('utf-8'))
                                         if not self.Credentials_Checked:
                                             ForbiddenResponse =self.CreateForbiddenResponse().encode()
+                                            ForbiddenResponse = self._inject_sequence_no(ForbiddenResponse,self.client_last_Cseq)
                                             self.client.sendall(ForbiddenResponse)
                                             self.logger.debug(self.CreateForbiddenResponse())
+                                            self._proto.addEntry('INFO P>C',ForbiddenResponse.decode())
                                             self.stop('Authorization failed 403')
+                                            self._proto.addEntry('INFO P>C','Authorization failed 403')
                                             continue
-                                            
+                                        else:
+                                            self._proto.addEntry('INFO P>C','Client - Authorization OK')
+                                    
+                                    
+                                    
+                                    
                                     if ('DESCRIBE' in clientblock.decode()):
-                                        injectedUrl = self.InjectRealUrl(clientblock)
-
-                                        #self.logger.debug("Client-Msg-org-{}".format(str(clientblock.decode())))                                        
-                                        self.logger.debug("Client-Msg-new-{}".format(str(injectedUrl.decode())))
+                                        injectedUrl = server_describe
+                                        self.logger.debug("Client-Msg-injected : {}".format(str(injectedUrl.decode())))
+                                        self._proto.addEntry('INFO    ',"Client-Msg-injected\r\n{}".format(str(injectedUrl.decode())))
+                                        
                                         clientblock = injectedUrl
+                                        
+
                                         
                                     try:
                                         self.server.connect((serverUrl, int(serverport)))
                                         #self.server.settimeout(5)
                                         self.server_url = True
-                                        self.logger.debug("ProxyCam4AlexaP3: connected to Server")
+                                        self.logger.debug("ProxyCam4AlexaP3: connected to Camera")
+                                        self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: connected to Camera")
                                     except Exception as err:
                                         self.logger.debug("not able to connect to Server-{}".format(err))
                                         self.stop('Exception see log-file')
@@ -369,7 +467,23 @@ class listenProxy(threading.Thread):
                                                         
                             try:
                                 if self.Credentials_Checked:
+                                    if ('Authorization:' in clientblock.decode()):
+                                        myClientBlock = self.DeleteAuthoriziation(clientblock.decode())
+                                        clientblock = myClientBlock.encode()
+                                         
+                                    
+
+                                    try:
+                                        self._inject_sequence_no(clientblock,self.server_last_Cseq)
+                                        self.server_last_Cseq += 1
+                                        if (self.authenticate != ""):
+                                            clientblock = self._inject_line(clientblock, self.authenticate)
+                                    except err as Exception:
+                                        self._proto.addEntry('ERROR   ',"While inject_squence in Clientblock/add authenticate {}".format(err))
+                                        pass
                                     self.server.send(clientblock)
+                                    if "\r\n" in clientblock.decode():
+                                        self._proto.addEntry('INFO P>S',clientblock.decode())
                             except Exception as err:
                                 self.logger.debug("Error while server-send {}".format(err))
 
@@ -427,6 +541,8 @@ class listenProxy(threading.Thread):
             temp = url
         else:
             temp = url[(http_pos + 3):]  # get the rest of url
+        if (not self.proxyUrl in temp):  # add Domain if missing
+            temp = self.proxyUrl+':' + str(self.port) + temp
         myCam = self.cams.get(temp)
         myCam.last_Session_Start = datetime.now()
         myCam.last_Session = myCam.last_Session_Start
@@ -453,7 +569,7 @@ class listenProxy(threading.Thread):
             webserver = temp[:port_pos]
         
         webserver = "{}".format(webserver)
-        webserver = '192.168.178.9'
+        #webserver = '192.168.178.9'
         port = 554
         self.logger.debug("got real Webserver-{}-".format(webserver))        
         return webserver, port, myCam
@@ -469,16 +585,12 @@ class listenProxy(threading.Thread):
         else:
             temp = url[(http_pos + 3):]  # get the rest of url
         myCam = self.cams.get(temp)
-        if myCam.user == '' and myCam.pwd == '':
-            NewUrl = "rtsp://%s" % (myCam.real_Url)
-        elif myCam.pwd == '':
-            NewUrl = "rtsp://" + myCam.user +"@"+ myCam.real_Url
-        else:
-            NewUrl = "rtsp://" + myCam.user + ":" + myCam.pwd + "@" + myCam.real_Url
+        NewUrl = "rtsp://%s" % (myCam.real_Url)
+        
         
         newStreamInfo = readableRequest.replace(url,NewUrl)
         # deleting Authorization 
-        newStreamInfo = self.DeleteAuthorziation(newStreamInfo)
+        newStreamInfo = self.DeleteAuthoriziation(newStreamInfo)
         
         try:
             myResponse = newStreamInfo.encode()#encoding='UTF-8',errors='strict')
@@ -488,9 +600,9 @@ class listenProxy(threading.Thread):
         
         return myResponse
     
-    def DeleteAuthorziation(self,myRequest):
-        if myRequest.find("Authorization") < 0:
-            return myRequest
+    def DeleteAuthoriziation(self,myRequest):
+        #if myRequest.find("Authorization") < 0:
+        #    return myRequest
         
         NewResponse = ""
         
@@ -498,6 +610,8 @@ class listenProxy(threading.Thread):
         for line in myLines:
             if line.find("Authorization") < 0:
                 NewResponse += line+"\r\n"
+        
+        #NewResponse += "\r\n"
         return NewResponse
         
             
@@ -517,6 +631,7 @@ class listenProxy(threading.Thread):
         PropValues['algorithm']=""
         PropValues['entity_body']=""
         
+        self._proto.addEntry('INFO    ',"CheckAuthorization\r\n" + Request)
         
         
         if Request.find("Authorization") < 0:
@@ -531,7 +646,7 @@ class listenProxy(threading.Thread):
                 break
             
                 
-                
+        self._proto.addEntry('INFO    ',"found Method : {}".format(PropValues['method']))                
         # no Authorization found
         if len(line) <= 5:
             return False
@@ -555,7 +670,6 @@ class listenProxy(threading.Thread):
             value = value.replace('"','')
             key=key.strip()
             PropValues[key]= value
-             
         PropValues['password']= self.pwd
         if AuthorizationType.upper() == 'DIGEST':
             myResponse = self.CalcHttpDigest(PropValues["qop"],
@@ -575,20 +689,7 @@ class listenProxy(threading.Thread):
         elif AuthorizationType.upper() == 'BASIC':
             return self.CheckUser(Request)
     
-    
-    def replace(self,p, strsearch, newValue):
-        if type(p) is dict:  
-            if strsearch in p:
-                tokenvalue = p[strsearch]
-                p[strsearch] = newValue
-                if not tokenvalue is None:
-                 return tokenvalue
-            else:
-                for i in p:
-                    tokenvalue = self.replace(p[i], strsearch,newValue)  
-                    if not tokenvalue is None:
-                        return tokenvalue
-            
+           
     
     def CalcHttpDigest(self,
                        qop,realm,
@@ -648,16 +749,149 @@ class listenProxy(threading.Thread):
             User = Credentials[0]
             Pwd =Credentials[1]
             
-            if len(self.path_User_File) == 0:
-                return False
-            
-            proc = Popen(['htpasswd','-vb',self.path_User_File,User,Pwd], stdout=PIPE, stderr=PIPE)
-            err, out = proc.communicate()
-            exitcode = proc.returncode
-            myString = out.decode()
-            if myString.find("correct") > 0 :
+            if User == self.proxy_credentials.split(":")[0] and Pwd == self.proxy_credentials.split(":")[1]:
                 return True
             else:
                 return False
+        
         except Exception as err:
             self.logger.error("Problem while parsing User-Credentials")
+            return False
+            
+    def server_add_authorization(self, serverblock, myDescribe):
+        PropValues ={}
+        PropValues['qop']=""
+        PropValues['realm']=""
+        PropValues['nonce']=""
+        PropValues['uri']=""
+        PropValues['cnonce']=""
+        PropValues['nc']=""
+        PropValues['username']=""
+        PropValues['password']=""
+        PropValues['method']=""
+        PropValues['algorithm']=""
+        PropValues['entity_body']=""
+        
+        # prepare Reponse-Fields
+        AuthorizationType = ''
+        nonce = ''
+        newResponse=[]
+        newResponseArray = myDescribe.split("\r\n")
+        for line in newResponseArray:
+            if line.strip() != "":
+                if "CSEQ:" in line.upper():
+                    SequenceNo = int(line.split(":")[1])
+                    line = "CSeq: "+str(SequenceNo+1)
+                newResponse.append(line+"\r\n")
+                
+        # Get method
+        myLines=myDescribe.splitlines()
+        for line in myLines:
+            if line.find('RTSP/1.0') >=0:
+                helpFields = line.split(" ")
+                PropValues['method']=helpFields[0].strip()
+                PropValues['uri']=helpFields[1].strip()
+
+        myLines=serverblock.splitlines()
+        for line in myLines:            
+            if line.find("WWW-Authenticate") >= 0:
+                break
+        
+        
+        myLines = line.split(",")
+        for myFields in myLines:
+            if myFields.find("WWW-Authenticate")>=0:
+                # Line with Authorization type and nonce
+                helpFields = myFields.split(" ")
+                AuthorizationType = helpFields[1]
+                myValue=line.find('realm="')+7
+                realm = line[myValue:]
+                myValue = realm.find('"')
+                realm=realm[:myValue]
+                
+                
+                
+                PropValues["realm"] = realm
+                continue
+            if myFields.find("nonce")>=0:
+                nonce=myFields.split("=")
+                nonce = nonce[1].replace('"', '')
+                PropValues["nonce"] = nonce
+            
+
+        PropValues['password']= self.actCam.pwd
+        PropValues['username']= self.actCam.user
+                
+        if AuthorizationType.upper() == 'DIGEST':
+            myNonce = self.CalcHttpDigest(PropValues["qop"],
+                                             PropValues["realm"],
+                                             PropValues["nonce"],
+                                             PropValues["uri"],
+                                             PropValues["cnonce"],
+                                             PropValues["nc"],
+                                             PropValues["username"],
+                                             PropValues["password"],
+                                             PropValues["method"],
+                                             PropValues["algorithm"],
+                                             PropValues["entity_body"])
+            
+            myAuth = 'Authorization: Digest username="'+PropValues["username"]+'", realm="'+PropValues["realm"]+'", nonce="'+ PropValues["nonce"] +'", uri="'+PropValues["uri"]+'", response="'+myNonce+'"'+"\r\n\r\n"
+
+            newResponse.append(myAuth)
+        
+        elif AuthorizationType.upper() == 'BASIC':
+            myCredentials = (self.actCam.user+":"+self.actCam.pwd)
+            myCredentials = base64.b64encode(myCredentials.encode('utf-8'))
+            myAuth = 'Authorization: Basic '+ myCredentials
+            newResponse.append(myAuth)
+            
+        myResponse = ""
+        for line in newResponse:
+            myResponse += line
+            
+        self.authenticate = myAuth
+        
+        return myResponse
+    
+    
+    
+    def _inject_line(self,block_to_decode,line2inject):
+        myNewBlock = ""
+        myNewArray = []
+        for line in block_to_decode.decode().split("\r\n"):
+            myNewArray.append(line)
+        ArrayCount = len(myNewArray)
+        myNewArray.insert(ArrayCount-2, line2inject)
+        myNewArray = myNewArray[:-1]
+        for line in myNewArray:
+            myNewBlock += line +"\r\n"
+        
+        #myNewBlock += line2inject+"\r\n"
+        #myNewBlock += "\r\n"
+        
+        NewBlock = myNewBlock.encode()
+        return NewBlock
+    
+    
+    def _get_sequence_no(self,block_to_decode):
+        for line in block_to_decode.decode().split("\r\n"):
+            if ("CSEQ" in line.upper()):
+                actSequenceNo = int(line.split(":")[1])
+                break
+        return actSequenceNo
+        
+    def _inject_sequence_no(self,block_to_decode,act_sequence_no):
+        myNewBlock = ""
+        myNewArray = []
+        for line in block_to_decode.decode().split("\r\n"):
+            if ("CSEQ" in line.upper()):
+                line ="CSeq: " + str(act_sequence_no)+ " "
+            myNewArray.append(line)
+        
+        myNewArray = myNewArray[:-1]
+        for line in myNewArray:
+            myNewBlock += line +"\r\n"
+        
+        NewBlock = myNewBlock.encode()
+        return NewBlock
+        

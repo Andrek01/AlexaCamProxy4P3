@@ -88,6 +88,7 @@ AlexaCamProxy4P3:
     proxy_url: '<your.domain.net>'
     proxy_credentials: '<user>:<pwd>'
     proxy_auth_type: 'DIGEST'
+    onyl_allow_own_IP: true
 ```
 
 
@@ -101,8 +102,9 @@ video_buffer : Size for the Videobuffer for streaming. Standard is 524280 bytes.
 
 Please try out what value fits to your setup and Cam´s.
 
-proxy_url : Your public DynDNS-URL. The CameraProxy will only allow access from your own public IP, no other Client will get Access
+proxy_url : Your public DynDNS-URL. 
 
+onyl_allow_own_IP: If set to True the CameraProxy will only allow access from your own public IP, no other Client will get Access. If set to False also foreign IP-addresses will be accepted.
 
 path_user_file : Path and File to the User-Credential File created by htpasswd. If you are using BASIC-Authentication you have to specify the User-Credentials for the Camera-Proxy in the "alexa_csc_proxy_credentials" in the item file of the Alexa4P3 plugin. If no path_user_file is specified the plugin does not check any credentials. Authentication is set to "NONE".
 

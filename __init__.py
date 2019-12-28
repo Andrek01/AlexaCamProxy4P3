@@ -47,36 +47,145 @@ import json
 import signal
 
 from .service import ThreadedServer
- 
 
+
+# Imports for TestSocket
+import socket
+import threading
+import select
+import ssl
+
+class protocoll(object):
+    
+    log = []
+    
+    def __init__(self):
+        pass
+    
+    def addEntry(self,type, _text ):
+        myLog = self.log
+        if (myLog == None):
+            return
+        try:
+            if len (myLog) >= 500:
+                myLog = myLog[0:499]
+        except:
+            return
+        myEntries = _text.split('\r\n')
+        entry_count = len(myEntries)-1
+        while (entry_count >= 1):
+            if len(str(myEntries[entry_count])) > 0:
+                myLog.insert(0,str("                   ")+'       ' + '       ' + '   '+str(myEntries[entry_count]))
+            entry_count += -1
+        now = str(datetime.now())[0:22]
+        myLog.insert(0,str(now)[0:19]+' Type: ' + str(type) + '  '+str(myEntries[0]))
+        self.log = myLog
+
+
+class TestSocket(threading.Thread):
+    def __init__(self,Proto):
+        threading.Thread.__init__(self)
+        self._proto = Proto
+        self._proto.addEntry('INFO    ',"Testsocket initialized")
+        self.outgoing_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.outgoing_socket.settimeout(10)
+
+        self.incoming_socket = None
+        self.mysocks = []
+        
+    def run(self):
+        self.alive = True
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.bind(('', 5000))
+        self.sock.listen(5)
+        wrappedSocket = None
+        while self.alive:
+            self.incoming_socket, address = self.sock.accept()
+            try:
+                # Connect to AlexCamProxy4P3
+                
+                #myCert = ssl.get_server_certificate(("192.168.178.37",443))
+                if wrappedSocket == None:
+                    # WRAP SOCKET
+                    wrappedSocket = ssl.wrap_socket(self.outgoing_socket, do_handshake_on_connect=True)
+                    # CONNECT AND PRINT REPLY
+                    wrappedSocket.connect(("192.168.178.37", 443))
+                
+                #self.outgoing_socket.connect(("192.168.178.37", 443))
+                self.mysocks.append(self.incoming_socket)
+                self.mysocks.append(wrappedSocket)
+                while True:
+                    readable, writable, exceptional = select.select(self.mysocks, [], [])
+                    for myActSock in readable:
+                        if myActSock == wrappedSocket:
+                            outgoing_block = b''
+                            while True:
+                                outgoing_data = wrappedSocket.recv(524800)
+                                if outgoing_data:
+                                    outgoing_block += outgoing_data
+                                if len(outgoing_block) < 524800:
+                                    break
+                            self.incoming_socket.sendall(outgoing_block)
+                        if myActSock == self.incoming_socket:
+                            incoming_block = b''
+                            while True:
+                                incoming_data = self.incoming_socket.recv(524800)
+                                if incoming_data:
+                                    incoming_block += incoming_data
+                                if len(incoming_block) < 4096:
+                                    break
+                            #self.outgoing_socket.sendall(incoming_block)
+                            wrappedSocket.sendall(incoming_block)
+            except Exception as err:
+                self.outgoing_socket.close()
+                #self.incoming_socket.shutdown(socket.SHUT_RDWR)
+                self.incoming_socket.close()
+                continue
+        
+        
+           
+    def stop(self):
+        try:
+            #self.incoming_socket.shutdown(socket.SHUT_RDWR)
+            self.incoming_socket.close()
+        except:
+            pass
+        try:
+            #self.outgoing_socket.shutdown(socket.SHUT_RDWR)
+            self.outgoing_socket.close()
+        except:
+            pass
+        try:
+            #self.sock.shutdown(socket.SHUT_RDWR)
+            self.sock.close()
+        except:
+            pass
+        self.alive = False
+        
+        
 class AlexaCamProxy4P3(SmartPlugin):
     PLUGIN_VERSION = '1.0.0'
     ALLOW_MULTIINSTANCE = False
     
-    
-    def __init__(self,
-                 sh,
-                 video_buffer=524280,
-                 cert_path='',
-                 cert_path_key='',
-                 port=443,
-                 proxy_url='',
-                 path_user_file='',
-                 proxy_credentials='',
-                 proxy_auth_type='NONE'):
-        self.sh = sh
+    def __init__(self, sh, *args, **kwargs):
+        self.sh = self.get_sh()
         self.logger = logging.getLogger(__name__)
-        self.PATH_CERT = cert_path
-        self.PATH_PRIVKEY = cert_path_key
-        self.cams = CamDevices()
-        self.ClientThreads = []
-        self.proxyUrl = proxy_url
-        self.path_user_file = path_user_file
+        self.PATH_CERT = self.get_parameter_value('cert_path')
+        self.PATH_PRIVKEY = self.get_parameter_value('cert_path_key') 
+        self.proxyUrl = self.get_parameter_value('proxy_url')
+        self.path_user_file = self.get_parameter_value('path_user_file')
         self.proxy_credentials=self.get_parameter_value('proxy_credentials')
         self.proxy_auth_type=self.get_parameter_value('proxy_auth_type')
-        self.video_buffer = video_buffer 
-        self.service = ThreadedServer(self.logger, port, self.video_buffer, cert_path, cert_path_key,self.cams,self.ClientThreads, self.proxyUrl,self.path_user_file,self.proxy_credentials,self.proxy_auth_type)
+        self.video_buffer = self.get_parameter_value('video_buffer')
+        self.port = self.get_parameter_value('port')
+        self.onyl_allow_own_IP = self.get_parameter_value('onyl_allow_own_IP')
+        self._proto = protocoll()
+        self.cams = CamDevices()
+        self.ClientThreads = []
+        self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.path_user_file,self.proxy_credentials,self.proxy_auth_type, self.onyl_allow_own_IP)
         self.service.name = 'AlexaCamProxy4P3-Handler'
+        #self.TestSocket = TestSocket(self._proto)
+        
         
         
         
@@ -111,11 +220,13 @@ class AlexaCamProxy4P3(SmartPlugin):
     def run(self):
         
         self.logger.info("Plugin '{}': start method called".format(self.get_fullname()))
+        self._proto.addEntry('INFO    ',"Plugin '{}': start method called".format(self.get_fullname()))
         try:
             myFile = open(self.PATH_CERT,"r")
             myFile.close()
         except Exception as err:
-            self.logger.error("Access Error to Cert-File {0}".format(self.PATH_CERT),' Error : ',err)
+            self._proto.addEntry('ERROR   ',"Access Error to Cert-File {} - Error {}".format(self.PATH_CERT, err))
+            self.logger.error("Access Error to Cert-File {} - Error {}".format(self.PATH_CERT,err))
             self.alive= False
             exit(1)
         try:
@@ -123,10 +234,12 @@ class AlexaCamProxy4P3(SmartPlugin):
             myFile.close()
         except:
             self.logger.error("Access Error to Cert-Key-File {0}".format(self.PATH_PRIVKEY),' Error : ',err)
+            self._proto.addEntry('ERROR   ',"Access Error to Cert-File {0} - Error {}".format(self.PATH_CERT, err))
             self.alive= False
             exit(1)
-        self.service.daemon = True
+        #self.service.daemon = True
         self.service.start()
+        #self.TestSocket.start()
         #self.service.join()     # ????????????
         self.alive = True
         while self.alive:
@@ -162,6 +275,7 @@ class AlexaCamProxy4P3(SmartPlugin):
             print ("Error while trying to close socket from Father-Thread",err)
             pass
         self.service.stop()
+        #self.TestSocket.stop()
         self.alive = False
     
     def CloseSockets(self,thread):
@@ -443,6 +557,15 @@ class WebInterface(SmartPluginWebIf):
             if ((self.plugin.has_iattr(item.conf, 'alexa_csc_uri')) and not (self.plugin.has_iattr(item.conf, 'alexa_csc_proxy_uri'))):
                 cam_tls_items.append(item)
         
+        # Internal-LogFile
+        try:
+            my_state_loglines = self.plugin._proto.log
+            state_log_file = ''
+            for line in my_state_loglines:
+                state_log_file += str(line)+'\n'
+        except:
+            state_log_file = 'No Data available right now\n'
+        
         # Collect proxied Cams
         cam_proxied_items = []
         myCams = self.plugin.cams.Cams
@@ -513,7 +636,8 @@ class WebInterface(SmartPluginWebIf):
                            item_tls=sorted(cam_tls_items, key=lambda k: str.lower(k['_path'])),
                            cert_issued_by=cert_issued_by, cert_issued_to=cert_issued_to ,
                            cert_notafter=cert_notafter ,cert_notBefore=cert_notBefore,my_Ciphers=my_Ciphers,
-                           video_buffer = self.plugin.video_buffer
+                           video_buffer = self.plugin.video_buffer,
+                           state_log_lines=state_log_file
                            )
         
                                    
