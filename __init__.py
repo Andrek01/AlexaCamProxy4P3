@@ -54,6 +54,7 @@ import socket
 import threading
 import select
 import ssl
+import errno
 
 class protocoll(object):
     
@@ -83,64 +84,127 @@ class protocoll(object):
 
 
 class TestSocket(threading.Thread):
-    def __init__(self,Proto):
+    def __init__(self,Proto, port):
         threading.Thread.__init__(self)
         self._proto = Proto
+        self.port = port
         self._proto.addEntry('INFO    ',"Testsocket initialized")
-        self.outgoing_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.outgoing_socket.settimeout(10)
+        self.outgoing_socket = None
+
 
         self.incoming_socket = None
         self.mysocks = []
         
     def run(self):
         self.alive = True
+        self.cycle = True
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #self.sock.setblocking(0)
         self.sock.bind(('', 5000))
         self.sock.listen(5)
         wrappedSocket = None
         while self.alive:
-            self.incoming_socket, address = self.sock.accept()
+            try:
+                self.incoming_socket, address = self.sock.accept()
+            except Exception as err:
+                pass
             try:
                 # Connect to AlexCamProxy4P3
-                
-                #myCert = ssl.get_server_certificate(("192.168.178.37",443))
+                self.incoming_socket.setblocking(0)
+                self.incoming_socket.settimeout(1)
                 if wrappedSocket == None:
+                    self.outgoing_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.outgoing_socket.setblocking(0)
+                    self.outgoing_socket.settimeout(1)
                     # WRAP SOCKET
                     wrappedSocket = ssl.wrap_socket(self.outgoing_socket, do_handshake_on_connect=True)
                     # CONNECT AND PRINT REPLY
-                    wrappedSocket.connect(("192.168.178.37", 443))
+                    wrappedSocket.connect(("127.0.0.1", self.port))
                 
                 #self.outgoing_socket.connect(("192.168.178.37", 443))
                 self.mysocks.append(self.incoming_socket)
-                self.mysocks.append(wrappedSocket)
+                if not wrappedSocket in self.mysocks:
+                    self.mysocks.append(wrappedSocket)
+                self.cycle = True
                 while True:
-                    readable, writable, exceptional = select.select(self.mysocks, [], [])
-                    for myActSock in readable:
-                        if myActSock == wrappedSocket:
-                            outgoing_block = b''
-                            while True:
-                                outgoing_data = wrappedSocket.recv(524800)
-                                if outgoing_data:
-                                    outgoing_block += outgoing_data
-                                if len(outgoing_block) < 524800:
+                    if self.cycle == False:
+                        break
+                    else:
+                        readable, writable, exceptional = select.select(self.mysocks, [self.incoming_socket], [self.incoming_socket])
+                        for myActSock in readable :
+                            
+                            if myActSock == wrappedSocket:
+                                outgoing_block = b''
+                                while True:
+                                    outgoing_data = wrappedSocket.recv(524800)
+                                    if outgoing_data:
+                                        outgoing_block += outgoing_data
+                                    if len(outgoing_block) < 524800:
+                                        break
+                                if len(outgoing_block) == 0:
+                                    try:
+                                        self.mysocks.remove(wrappedSocket)
+                                        wrappedSocket.close()
+                                        wrappedSocket = None
+                                        pass
+                                    except:
+                                        pass
+                                    try:
+                                        self.mysocks.remove(self.incoming_socket)
+                                        self.incoming_socket.close()
+                                    except:
+                                        pass    
+                                    break                            
+                                self.incoming_socket.sendall(outgoing_block)
+                            if myActSock == self.incoming_socket:
+                                incoming_block = b''
+                                while True:
+                                    incoming_data = self.incoming_socket.recv(524800)
+                                    if incoming_data:
+                                        incoming_block += incoming_data
+                                    if len(incoming_block) < 4096:
+                                        break
+                                if len(incoming_block) == 0:
+                                    try:
+                                        wrappedSocket.sendall(b'TEARDOWN')
+                                        self.mysocks.remove(wrappedSocket)
+                                        wrappedSocket.close()
+                                        wrappedSocket = None
+                                        pass
+                                    except:
+                                        pass
+                                    try:
+                                        self.mysocks.remove(self.incoming_socket)
+                                        self.incoming_socket.close()
+                                    except:
+                                        pass
+                                    
+                                    self.cycle = False
                                     break
-                            self.incoming_socket.sendall(outgoing_block)
-                        if myActSock == self.incoming_socket:
-                            incoming_block = b''
-                            while True:
-                                incoming_data = self.incoming_socket.recv(524800)
-                                if incoming_data:
-                                    incoming_block += incoming_data
-                                if len(incoming_block) < 4096:
-                                    break
-                            #self.outgoing_socket.sendall(incoming_block)
-                            wrappedSocket.sendall(incoming_block)
+                                #self.outgoing_socket.sendall(incoming_block)
+                                wrappedSocket.sendall(incoming_block)
+                        for s in exceptional:
+                            wrappedSocket.close()
+                            wrappedSocket = None
+                            break
+                        
             except Exception as err:
-                self.outgoing_socket.close()
+                try:
+                    wrappedSocket.close(
+                    wrappedSocket == None)
+                    pass
+                except:
+                    pass
+                try:
+                    self.incoming_socket.close()
+                except:
+                    pass
                 #self.incoming_socket.shutdown(socket.SHUT_RDWR)
-                self.incoming_socket.close()
+                
+                #wrappedSocket=None
+                self.mysocks = []
                 continue
+                
         
         
            
@@ -161,6 +225,29 @@ class TestSocket(threading.Thread):
         except:
             pass
         self.alive = False
+    
+    def issocketvalid(self, socket_instance):
+        """ Return True if this socket is connected. """
+        if not socket_instance:
+            return False
+
+        try:
+            socket_instance.getsockname()
+        except socket.error as err:
+            err_type = err.args[0]
+            if err_type == errno.EBADF:  # 9: Bad file descriptor
+                return False
+
+        err_type = None
+        try:
+            socket_instance.getpeername()
+        except socket.error as err:
+            err_type = err.args[0]
+        if err_type in [errno.EBADF, errno.ENOTCONN]:  # 9: Bad file descriptor.
+            return False  # 107: Transport endpoint is not connected
+
+        return True
+
         
         
 class AlexaCamProxy4P3(SmartPlugin):
@@ -184,7 +271,8 @@ class AlexaCamProxy4P3(SmartPlugin):
         self.ClientThreads = []
         self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.path_user_file,self.proxy_credentials,self.proxy_auth_type, self.onyl_allow_own_IP)
         self.service.name = 'AlexaCamProxy4P3-Handler'
-        #self.TestSocket = TestSocket(self._proto)
+        self.TestSocket = TestSocket(self._proto, self.port)
+        self.TestSocket.name = 'AlexaCamProxy4P3-Testsocket'
         
         
         
@@ -239,7 +327,7 @@ class AlexaCamProxy4P3(SmartPlugin):
             exit(1)
         #self.service.daemon = True
         self.service.start()
-        #self.TestSocket.start()
+        self.TestSocket.start()
         #self.service.join()     # ????????????
         self.alive = True
         while self.alive:
@@ -261,8 +349,7 @@ class AlexaCamProxy4P3(SmartPlugin):
                         self.logger.debug("ProxyCam4AlexaP3: stopped Thread : %s " % Threadname)
 
             time.sleep(2)
-        # Start the Service himself
-        
+       
         
 
     def stop(self):
@@ -275,7 +362,7 @@ class AlexaCamProxy4P3(SmartPlugin):
             print ("Error while trying to close socket from Father-Thread",err)
             pass
         self.service.stop()
-        #self.TestSocket.stop()
+        self.TestSocket.stop()
         self.alive = False
     
     def CloseSockets(self,thread):

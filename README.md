@@ -69,7 +69,7 @@ Nothing special needed, see Needed software
 
 ## Supported Hardware
 
-* all Cameras with RTSP-Protocoll and Handling OPTIONS/DESCRIBE/PLAY/PAUSE
+* all Cameras with RTSP-Protocoll and Handling OPTIONS/DESCRIBE/PLAY/TEARDOWN
 
 ## Configuration<a name="config"/></a>
 

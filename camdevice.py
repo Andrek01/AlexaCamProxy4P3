@@ -14,7 +14,12 @@ class CamDevices(object):
     def all(self):
         return list( self.Cam.values() )
 
-
+    def getCambyUUID(self, url):
+        for myCam in self.Cams:
+            if url in self.Cams[myCam].proxied_Url:
+                return self.Cams[myCam]
+        return None
+    
 class Cam(object):
     def __init__(self, id):
         self.id = id

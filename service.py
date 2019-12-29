@@ -80,19 +80,22 @@ class ThreadedServer(threading.Thread):
         if self.FirstRound:
                 if (self.proxyUrl != ''):
                     self.myIP = self.GetMyIP(self.proxyUrl)
-                self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                self.sock.bind(('', self.port))
-                self.sock.listen(5)
-                self.FirstRound=False
-                self.running= True
-                #================================
-                # SSL-Settings
-                #================================
-                context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-                # add Certificate to context
-                context.load_cert_chain(self.cert_path, self.cert_path_key)  
-                # add ciphers to context
-                context.set_ciphers(self.cert_ciphers)
+                try:
+                    self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.sock.bind(('', self.port))
+                    self.sock.listen(5)
+                    self.FirstRound=False
+                    self.running= True
+                    #================================
+                    # SSL-Settings
+                    #================================
+                    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+                    # add Certificate to context
+                    context.load_cert_chain(self.cert_path, self.cert_path_key)  
+                    # add ciphers to context
+                    context.set_ciphers(self.cert_ciphers)
+                except Exception as err:
+                    self.logger.error("could not open Socket on Port {} Error : {}".format(self.port,err))
         aktThread = 0        
         while self.running:
             client, address = self.sock.accept()
@@ -391,65 +394,12 @@ class ProxySocket(threading.Thread):
                                 try:
                                     try:
                                         serverUrl, serverport,self.actCam =self.getUrl(clientblock.decode())
+                                        if serverUrl == False:
+                                            # found no Cam
+                                            self.stop('Found no Cam !!')
                                     except Exception as err:
                                         self.logger.debug("Error while parsing real URL")
-                                    
-                                    
-                                    if ('GET' in clientblock.decode() or self.Authorization_send == False):
-                                        # Keep Describe to Server in mind
-                                        if ('DESCRIBE' in clientblock.decode() and server_describe == ""):
-                                            server_describe = self._inject_sequence_no(clientblock, self.server_last_Cseq)
-                                            server_describe = self.InjectRealUrl(server_describe)
-                                            self._proto.addEntry('INFO    ',"reminded parsed DESCRIBE from Client\r\n"+server_describe.decode())
-                                        
-                                        
-                                        
-                                        if 'DIGEST' in self.proxy_auth_type:
-                                            AuthResponse = self.CreateDigestAuthResponse().encode()
-                                            AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
-                                            self.client.sendall(AuthResponse)
-                                            self.Authorization_send = True
-                                            self.logger.debug(self.CreateDigestAuthResponse())
-                                            self._proto.addEntry('INFO P>C',AuthResponse.decode())
-                                            continue
-                                        elif 'BASIC' in self.proxy_auth_type:
-                                            AuthResponse =self.CreateBasicAuthResponse().encode()
-                                            AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
-                                            self.client.sendall(AuthResponse)
-                                            self.Authorization_send = True
-                                            self.logger.debug(self.CreateBasicAuthResponse())
-                                            self._proto.addEntry('INFO P>C',AuthResponse.decode())
-                                            continue
-
-                                        
-                                    # Authorization arrives
-                                    if ('Authorization:' in clientblock.decode() and not self.Credentials_Checked):
-
-                                        self.Credentials_Checked = self.CheckAuthorization(clientblock.decode('utf-8'))
-                                        if not self.Credentials_Checked:
-                                            ForbiddenResponse =self.CreateForbiddenResponse().encode()
-                                            ForbiddenResponse = self._inject_sequence_no(ForbiddenResponse,self.client_last_Cseq)
-                                            self.client.sendall(ForbiddenResponse)
-                                            self.logger.debug(self.CreateForbiddenResponse())
-                                            self._proto.addEntry('INFO P>C',ForbiddenResponse.decode())
-                                            self.stop('Authorization failed 403')
-                                            self._proto.addEntry('INFO P>C','Authorization failed 403')
-                                            continue
-                                        else:
-                                            self._proto.addEntry('INFO P>C','Client - Authorization OK')
-                                    
-                                    
-                                    
-                                    
-                                    if ('DESCRIBE' in clientblock.decode()):
-                                        injectedUrl = server_describe
-                                        self.logger.debug("Client-Msg-injected : {}".format(str(injectedUrl.decode())))
-                                        self._proto.addEntry('INFO    ',"Client-Msg-injected\r\n{}".format(str(injectedUrl.decode())))
-                                        
-                                        clientblock = injectedUrl
-                                        
-
-                                        
+                                        self.stop('Found no Cam !!')
                                     try:
                                         self.server.connect((serverUrl, int(serverport)))
                                         #self.server.settimeout(5)
@@ -459,9 +409,70 @@ class ProxySocket(threading.Thread):
                                     except Exception as err:
                                         self.logger.debug("not able to connect to Server-{}".format(err))
                                         self.stop('Exception see log-file')
+                                    
                                 except Exception as err:
                                     self.logger.debug("got no ServerUrl / ServerPort / ActualCam :{}".format(err))
                                     self.stop('Exception see log-file')
+                                        
+                                
+                            # Keep Describe to Server in mind
+                            if ('DESCRIBE' in clientblock.decode() and server_describe == "" and not 'OPTIONS' in clientblock.decode()):
+                                server_describe = self._inject_sequence_no(clientblock, self.server_last_Cseq)
+                                server_describe = self.InjectRealUrl(server_describe)
+                                if server_describe == False:
+                                    self.stop("Error while InjetRealURL")
+                                self._proto.addEntry('INFO    ',"reminded parsed DESCRIBE from Client\r\n"+server_describe.decode())
+                                
+                                
+                            if (self.Authorization_send == False):    
+                                if 'DIGEST' in self.proxy_auth_type:
+                                    AuthResponse = self.CreateDigestAuthResponse().encode()
+                                    AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
+                                    self.client.sendall(AuthResponse)
+                                    self.Authorization_send = True
+                                    self.logger.debug(self.CreateDigestAuthResponse())
+                                    self._proto.addEntry('INFO P>C',AuthResponse.decode())
+                                    continue
+                                elif 'BASIC' in self.proxy_auth_type:
+                                    AuthResponse =self.CreateBasicAuthResponse().encode()
+                                    AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
+                                    self.client.sendall(AuthResponse)
+                                    self.Authorization_send = True
+                                    self.logger.debug(self.CreateBasicAuthResponse())
+                                    self._proto.addEntry('INFO P>C',AuthResponse.decode())
+                                    continue
+
+                                
+                            # Authorization arrives
+                            if ('Authorization:' in clientblock.decode() and not self.Credentials_Checked):
+
+                                self.Credentials_Checked = self.CheckAuthorization(clientblock.decode('utf-8'))
+                                if not self.Credentials_Checked:
+                                    ForbiddenResponse =self.CreateForbiddenResponse().encode()
+                                    ForbiddenResponse = self._inject_sequence_no(ForbiddenResponse,self.client_last_Cseq)
+                                    self.client.sendall(ForbiddenResponse)
+                                    self.logger.debug(self.CreateForbiddenResponse())
+                                    self._proto.addEntry('INFO P>C',ForbiddenResponse.decode())
+                                    self.stop('Authorization failed 403')
+                                    self._proto.addEntry('INFO P>C','Authorization failed 403')
+                                    continue
+                                else:
+                                    self._proto.addEntry('INFO P>C','Client - Authorization OK')
+                            
+                            
+                            
+                            
+                            if ('DESCRIBE' in clientblock.decode() and server_describe != ""):
+                                injectedUrl = server_describe
+                                self.logger.debug("Client-Msg-injected : {}".format(str(injectedUrl.decode())))
+                                self._proto.addEntry('INFO    ',"Client-Msg-injected\r\n{}".format(str(injectedUrl.decode())))
+                                
+                                clientblock = injectedUrl
+                                
+
+                                
+                            
+                            
                                    
                             # Send data to Server if connected
                                                         
@@ -495,9 +506,10 @@ class ProxySocket(threading.Thread):
 
                         else:
                             self.stop('Client-hang up')
-                            continue        # loop
+                            self.stop('Client-Message hang up')
+                            #continue        # loop
                             #self.logger.debug("ProxyCam4AlexaP3: Client-Message hang up")
-                            #self.stop('Client-Message hang up')
+                            
                             #raise
                             #pass # error('Client disconnected')
                     except Exception as err:
@@ -541,9 +553,27 @@ class ProxySocket(threading.Thread):
             temp = url
         else:
             temp = url[(http_pos + 3):]  # get the rest of url
+        '''
         if (not self.proxyUrl in temp):  # add Domain if missing
             temp = self.proxyUrl+':' + str(self.port) + temp
-        myCam = self.cams.get(temp)
+        '''
+        temp=url.split("/")[len(url.split("/"))-1]    
+        myCam = None
+        try:
+            myCam = self.cams.get(temp)
+        except:
+            pass
+        
+        if myCam == None:
+            try:
+                myCam = self.cams.getCambyUUID(temp)
+            except:
+                pass
+        # Still not found the correct Camera
+        if myCam == None:
+            self._proto.addEntry('ERROR   ',"Found no Camera for {} while getting URL".format(temp))
+            return False,False,False
+        
         myCam.last_Session_Start = datetime.now()
         myCam.last_Session = myCam.last_Session_Start
         myCam.Sessions_total += 1
@@ -584,7 +614,26 @@ class ProxySocket(threading.Thread):
             temp = url
         else:
             temp = url[(http_pos + 3):]  # get the rest of url
-        myCam = self.cams.get(temp)
+        
+            
+        myCam = None
+        try:
+            myCam = self.cams.get(temp)
+        except:
+            pass
+        
+        if myCam == None:
+            try:
+                temp=url.split("/")[len(url.split("/"))-1]
+                myCam = self.cams.getCambyUUID(temp)
+            except:
+                pass
+        # Still not found the correct Camera
+        if myCam == None:
+            self._proto.addEntry('ERROR   ',"Found no Camera for {} while injecting real-URL".format(temp))
+            return False
+        
+        
         NewUrl = "rtsp://%s" % (myCam.real_Url)
         
         
