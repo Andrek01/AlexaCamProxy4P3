@@ -202,7 +202,7 @@ class ProxySocket(threading.Thread):
         except Exception as err:
             self.logger.debug("ProxyCam4AlexaP3: Cam Thread cannot close Server-socket-{}".format(err))
         self.logger.debug("ProxyCam4AlexaP3: Cam Thread stopped - %s" % txtInfo)
-        self._proto.addEntry('INFO    ','Cam Thread stopped - %s' % txtInfo)
+        self._proto.addEntry('INFO    ','stopped  Thread {} Reason : {}'.format(self.name, txtInfo))
         self.actCam.proxied_bytes +=self.proxied_bytes
         try:
             self.actCam.last_Session_End = datetime.now()
@@ -401,11 +401,15 @@ class ProxySocket(threading.Thread):
                                         self.logger.debug("Error while parsing real URL")
                                         self.stop('Found no Cam !!')
                                     try:
-                                        self.server.connect((serverUrl, int(serverport)))
-                                        #self.server.settimeout(5)
-                                        self.server_url = True
-                                        self.logger.debug("ProxyCam4AlexaP3: connected to Camera")
-                                        self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: connected to Camera")
+                                        try:
+                                            self.server.connect((serverUrl, int(serverport)))
+                                            self.server_url = True
+                                            self.logger.debug("ProxyCam4AlexaP3: connected to Camera")
+                                            self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: connected to Camera")
+                                        except:
+                                            self.logger.warning("could not connected to Camera : {}".format(serverUrl))
+                                            self._proto.addEntry('ERROR   ',"could not connected to Camera : {}".format(serverUrl))
+                                            self.stop("not Connection to Camera")
                                     except Exception as err:
                                         self.logger.debug("not able to connect to Server-{}".format(err))
                                         self.stop('Exception see log-file')
@@ -542,6 +546,7 @@ class ProxySocket(threading.Thread):
 
 
     def getUrl(self, request):
+        port = ''
         webserver = ''
         # parse the first line
         first_line = request.split('\n')[0]
@@ -553,10 +558,7 @@ class ProxySocket(threading.Thread):
             temp = url
         else:
             temp = url[(http_pos + 3):]  # get the rest of url
-        '''
-        if (not self.proxyUrl in temp):  # add Domain if missing
-            temp = self.proxyUrl+':' + str(self.port) + temp
-        '''
+
         temp=url.split("/")[len(url.split("/"))-1]    
         myCam = None
         try:
@@ -599,8 +601,12 @@ class ProxySocket(threading.Thread):
             webserver = temp[:port_pos]
         
         webserver = "{}".format(webserver)
-        #webserver = '192.168.178.9'
-        port = 554
+        try:
+            webserver = socket.gethostbyname(webserver)
+        except:
+            self._proto.addEntry('ERROR   ',"Could not resolve IP-Adress for {}".format(webserver))
+        if port == "": 
+            port = 554
         self.logger.debug("got real Webserver-{}-".format(webserver))        
         return webserver, port, myCam
 

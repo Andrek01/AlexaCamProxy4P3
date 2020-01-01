@@ -80,7 +80,7 @@ The plugin has the following paramters in the plugin.yaml
 ```yaml
 AlexaCamProxy4P3:
     class_name: AlexaCamProxy4P3
-    class_path: plugins.alexacamproxy4P3
+    class_path: plugins.alexacamproxy4p3
     port: 443
     video_buffer: 524280
     cert_path: '/usr/local/smarthome/plugins/alexacamproxy4p3/fullchain.pem'
