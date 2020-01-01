@@ -602,7 +602,10 @@ class ProxySocket(threading.Thread):
         
         webserver = "{}".format(webserver)
         try:
-            webserver = socket.gethostbyname(webserver)
+            myHost = socket.gethostbyname(webserver)
+            if (myHost != webserver):
+                self._proto.addEntry('INFO    ',"resolved IP {} for Hostname : {}".format(myHost,webserver))
+                webserver = myHost
         except:
             self._proto.addEntry('ERROR   ',"Could not resolve IP-Adress for {}".format(webserver))
         if port == "": 
