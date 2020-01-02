@@ -385,6 +385,8 @@ class ProxySocket(threading.Thread):
                         if clientblock:
                             self.logger.debug("ProxyCam4AlexaP3: Client-Message-{}".format(str(clientblock.decode())))
                             self._proto.addEntry('INFO C>P','Client-Message-{}'.format(str(clientblock.decode())))
+                            self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
+                            
                             try:
                                 self.client_last_Cseq = self._get_sequence_no(clientblock)
                             except:
@@ -496,10 +498,11 @@ class ProxySocket(threading.Thread):
                                     except err as Exception:
                                         self._proto.addEntry('ERROR   ',"While inject_squence in Clientblock/add authenticate {}".format(err))
                                         pass
-                                    self.server.send(clientblock)
+                                    self.server.sendall(clientblock)
                                     if "\r\n" in clientblock.decode():
                                         self._proto.addEntry('INFO P>S',clientblock.decode())
-                            except Exception as err:
+                                        self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
+                            except err as Exception:
                                 self.logger.debug("Error while server-send {}".format(err))
 
                                 
@@ -516,7 +519,7 @@ class ProxySocket(threading.Thread):
                             
                             #raise
                             #pass # error('Client disconnected')
-                    except Exception as err:
+                    except err as Exception:
                         self.logger.debug("ProxyCam4AlexaP3: Error in Client-Block-{}".format(err))
                         self.stop('Error in Client-Block')
                         pass
@@ -580,25 +583,29 @@ class ProxySocket(threading.Thread):
         myCam.last_Session = myCam.last_Session_Start
         myCam.Sessions_total += 1
         temp=myCam.real_Url
-        
-        port_pos = temp.find(":")  # find the port pos (if any)
-
-        # find end of web server
-        webserver_pos = temp.find("/")
-        if webserver_pos == -1:
-            webserver_pos = len(temp)
-
-        webserver = ""
-        port = -1
-        if (port_pos == -1 or webserver_pos < port_pos):
-
-            # default port
-            port = 554
-            webserver = temp[:webserver_pos]
-
-        else:  # specific port
-            port = int((temp[(port_pos + 1):])[:webserver_pos - port_pos - 1])
-            webserver = temp[:port_pos]
+        try:
+            port_pos = temp.find(":")  # find the port pos (if any)
+    
+            # find end of web server
+            webserver_pos = temp.find("/")
+            if webserver_pos == -1:
+                webserver_pos = len(temp)
+    
+            webserver = ""
+            port = -1
+            if (port_pos == -1 or webserver_pos < port_pos):
+    
+                # default port
+                port = 554
+                webserver = temp[:webserver_pos]
+    
+            else:  # specific port
+                port = int((temp[(port_pos + 1):])[:webserver_pos - port_pos - 1])
+                webserver = temp[:port_pos]
+        except:
+            self._proto.addEntry('ERROR   ',"Error while parsing REAL-URL : {}".format(myCam.real_Url))
+            self.logger.error("Error while parsing REAL-URL : {}".format(myCam.real_Url))
+            return False,False,False
         
         webserver = "{}".format(webserver)
         try:
@@ -608,6 +615,8 @@ class ProxySocket(threading.Thread):
                 webserver = myHost
         except:
             self._proto.addEntry('ERROR   ',"Could not resolve IP-Adress for {}".format(webserver))
+            self.logger.error("Could not resolve IP-Adress for {}".format(webserver))
+            return False,False,False
         if port == "": 
             port = 554
         self.logger.debug("got real Webserver-{}-".format(webserver))        
@@ -799,10 +808,12 @@ class ProxySocket(threading.Thread):
     def CheckUser(self, request):
         try:
             request = request.splitlines()
-            request = request[2]
+            for line in request:
+                if "Authorization" in line:
+                    request = line
+                    break
             Credentials = request.split(" ")
-            Credentials = base64.b64decode(Credentials[2])
-            Credentials = Credentials.decode("utf-8")
+            Credentials = base64.b64decode(Credentials[2]).decode()
             Credentials = Credentials.split(":")
             User = Credentials[0]
             Pwd =Credentials[1]
@@ -899,7 +910,7 @@ class ProxySocket(threading.Thread):
         
         elif AuthorizationType.upper() == 'BASIC':
             myCredentials = (self.actCam.user+":"+self.actCam.pwd)
-            myCredentials = base64.b64encode(myCredentials.encode('utf-8'))
+            myCredentials = base64.b64encode(myCredentials.encode('utf-8')).decode()
             myAuth = 'Authorization: Basic '+ myCredentials
             newResponse.append(myAuth)
             
@@ -919,13 +930,11 @@ class ProxySocket(threading.Thread):
         for line in block_to_decode.decode().split("\r\n"):
             myNewArray.append(line)
         ArrayCount = len(myNewArray)
-        myNewArray.insert(ArrayCount-2, line2inject)
+        myNewArray.insert(2, line2inject)
         myNewArray = myNewArray[:-1]
         for line in myNewArray:
             myNewBlock += line +"\r\n"
         
-        #myNewBlock += line2inject+"\r\n"
-        #myNewBlock += "\r\n"
         
         NewBlock = myNewBlock.encode()
         return NewBlock

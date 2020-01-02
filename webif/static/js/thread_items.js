@@ -1,6 +1,21 @@
 window.addEventListener("resize", resizeItemTree, false);
 
-
+function ToggleTrigger(myID) {
+ myValue = document.getElementById(myID).checked
+ switch (myParam) {
+	case 'toggleTestSocket':
+		{
+			if (myValue == 'True')
+			{
+			
+			}
+            else
+            {
+            }
+			break;
+		}
+    }
+}
 
 function resizeItemTree() {
     var browserHeight = $( window ).height();

@@ -78,8 +78,8 @@ class protocoll(object):
             if len(str(myEntries[entry_count])) > 0:
                 myLog.insert(0,str("                   ")+'       ' + '       ' + '   '+str(myEntries[entry_count]))
             entry_count += -1
-        now = str(datetime.now())[0:22]
-        myLog.insert(0,str(now)[0:19]+' Type: ' + str(type) + '  '+str(myEntries[0]))
+        now = str(datetime.now())[0:24]
+        myLog.insert(0,str(now)[0:24]+'  ' + str(type) + '  '+str(myEntries[0]))
         self.log = myLog
 
 
@@ -119,6 +119,8 @@ class TestSocket(threading.Thread):
                     # WRAP SOCKET
                     wrappedSocket = ssl.wrap_socket(self.outgoing_socket, do_handshake_on_connect=True)
                     # CONNECT AND PRINT REPLY
+                    
+                    #wrappedSocket.connect(("80.151.66.146", self.port))
                     wrappedSocket.connect(("127.0.0.1", self.port))
                 
                 #self.outgoing_socket.connect(("192.168.178.37", 443))
