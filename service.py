@@ -275,7 +275,7 @@ class ProxySocket(threading.Thread):
             if not self.server and self.server_url: # and not self.issocketvalid(self.server) ???? When has state 107 passed ??? 
                 self.stop('Server socket is dead')
                 continue        # loop
-            readable, writable, exceptional = select.select(self.mysocks, [], [])
+            readable, writable, exceptional = select.select(self.mysocks, self.mysocks, [])
             #self.logger.debug("Got readable socket")
             for myActSock in readable:
                 if myActSock == self.server:
@@ -309,28 +309,6 @@ class ProxySocket(threading.Thread):
                                         self.server_auth = True
                                         continue
                                 
-                                
-
-                                '''
-                                # Handle different C-Sequences between Client and Server 
-                                if (not self.QSeq_checked and self.server_auth and 'RTSP/1.0 200 OK' in serverblock.decode()):
-                                    self._proto.addEntry('INFO    ',"Start to correct Sequence-count after Authorization")
-                                    self._proto.addEntry('INFO    ',"Original-Block-length : {}".format(len(serverblock.decode())))
-                                    self._proto.addEntry('INFO    ',"Original-Block :\r\n"+serverblock.decode())
-                                    myNewBlock = ""
-                                    for line in serverblock.decode().split("\r\n"):
-                                        if ("CSEQ" in line.upper()):
-                                            line ="CSeq: " + str(int(line.split(":")[1])-1)
-                                        myNewBlock += line +"\r\n"
-                                    
-                                    myNewBlock += "\r\n"
-                                    
-                                    NewServerblock = myNewBlock.encode()
-                                    self._proto.addEntry('INFO    ',"New-Block :\r\n"+NewServerblock.decode())
-                                    self._proto.addEntry('INFO    ',"New-Block-length : {}".format(len(NewServerblock.decode())))
-                                    self._proto.addEntry('INFO    ',"Corrected Sequence-count after Authorization")
-                                    serverblock = NewServerblock
-                                '''
                             except:
                                 pass
                                 
@@ -352,7 +330,8 @@ class ProxySocket(threading.Thread):
                             except:
                                 pass
                             
-                            self.client.send(serverblock)
+                            if (not "RTSP/1.0 400 Bad Request" in serverblock.decode()):
+                                self.client.send(serverblock)
                             
 
                             if self.actCam != None:
@@ -392,33 +371,7 @@ class ProxySocket(threading.Thread):
                             except:
                                 pass
                                 
-                            if not self.server_url:
-                                try:
-                                    try:
-                                        serverUrl, serverport,self.actCam =self.getUrl(clientblock.decode())
-                                        if serverUrl == False:
-                                            # found no Cam
-                                            self.stop('Found no Cam !!')
-                                    except Exception as err:
-                                        self.logger.debug("Error while parsing real URL")
-                                        self.stop('Found no Cam !!')
-                                    try:
-                                        try:
-                                            self.server.connect((serverUrl, int(serverport)))
-                                            self.server_url = True
-                                            self.logger.debug("ProxyCam4AlexaP3: connected to Camera")
-                                            self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: connected to Camera")
-                                        except:
-                                            self.logger.warning("could not connected to Camera : {}".format(serverUrl))
-                                            self._proto.addEntry('ERROR   ',"could not connected to Camera : {}".format(serverUrl))
-                                            self.stop("not Connection to Camera")
-                                    except Exception as err:
-                                        self.logger.debug("not able to connect to Server-{}".format(err))
-                                        self.stop('Exception see log-file')
-                                    
-                                except Exception as err:
-                                    self.logger.debug("got no ServerUrl / ServerPort / ActualCam :{}".format(err))
-                                    self.stop('Exception see log-file')
+                            
                                         
                                 
                             # Keep Describe to Server in mind
@@ -498,6 +451,36 @@ class ProxySocket(threading.Thread):
                                     except err as Exception:
                                         self._proto.addEntry('ERROR   ',"While inject_squence in Clientblock/add authenticate {}".format(err))
                                         pass
+                                    
+                                    if not self.server_url and self.Credentials_Checked == True:
+                                        try:
+                                            try:
+                                                serverUrl, serverport,self.actCam =self.getUrl(clientblock.decode())
+                                                if serverUrl == False:
+                                                    # found no Cam
+                                                    self.stop('Found no Cam !!')
+                                            except Exception as err:
+                                                self.logger.debug("Error while parsing real URL")
+                                                self.stop('Found no Cam !!')
+                                            try:
+                                                try:
+                                                    self.server.connect((serverUrl, int(serverport)))
+                                                    self.server_url = True
+                                                    self.logger.debug("ProxyCam4AlexaP3: connected to Camera")
+                                                    self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: connected to Camera")
+                                                except:
+                                                    self.logger.warning("could not connected to Camera : {}".format(serverUrl))
+                                                    self._proto.addEntry('ERROR   ',"could not connected to Camera : {}".format(serverUrl))
+                                                    self.stop("not Connection to Camera")
+                                            except Exception as err:
+                                                self.logger.debug("not able to connect to Server-{}".format(err))
+                                                self.stop('Exception see log-file')
+                                            
+                                        except Exception as err:
+                                            self.logger.debug("got no ServerUrl / ServerPort / ActualCam :{}".format(err))
+                                            self.stop('Exception see log-file')
+                                    
+                                    
                                     self.server.sendall(clientblock)
                                     if "\r\n" in clientblock.decode():
                                         self._proto.addEntry('INFO P>S',clientblock.decode())
@@ -513,7 +496,7 @@ class ProxySocket(threading.Thread):
 
                         else:
                             self.stop('Client-hang up')
-                            self.stop('Client-Message hang up')
+                            #self.stop('Client-Message hang up')
                             #continue        # loop
                             #self.logger.debug("ProxyCam4AlexaP3: Client-Message hang up")
                             
