@@ -75,27 +75,28 @@ class protocoll(object):
         myEntries = _text.split('\r\n')
         entry_count = len(myEntries)-1
         while (entry_count >= 1):
-            if len(str(myEntries[entry_count])) > 0:
-                myLog.insert(0,str("                   ")+'       ' + '       ' + '   '+str(myEntries[entry_count]))
+            #if len(str(myEntries[entry_count])) > 0:
+            myLog.insert(0,str("                   ")+'       ' + '       ' + '   '+str(myEntries[entry_count])+'«')
             entry_count += -1
         now = str(datetime.now())[0:24]
-        myLog.insert(0,str(now)[0:24]+'  ' + str(type) + '  '+str(myEntries[0]))
+        myLog.insert(0,str(now)[0:24]+'  ' + str(type) + '  '+str(myEntries[0])+'«')
         self.log = myLog
 
 
 class TestSocket(threading.Thread):
-    def __init__(self,Proto, port):
+    def __init__(self,Proto, port, logger):
         threading.Thread.__init__(self)
         self._proto = Proto
         self.port = port
+        self.logger = logger
         self._proto.addEntry('INFO    ',"Testsocket initialized")
         self.outgoing_socket = None
-
-
         self.incoming_socket = None
         self.mysocks = []
         
     def run(self):
+        self._proto.addEntry('INFO    ',"Testsocket started")
+        self.logger.info("Testsocket started")
         self.alive = True
         self.cycle = True
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -211,44 +212,32 @@ class TestSocket(threading.Thread):
         
            
     def stop(self):
+        self.cycle = False
+        self._proto.addEntry('INFO    ',"Testsocket stopped")
+        self.logger.info("Testsocket stopped")
         try:
-            #self.incoming_socket.shutdown(socket.SHUT_RDWR)
+            self.incoming_socket.shutdown(socket.SHUT_RDWR)
+            self.logger.debug("Testsocket Incoming-Socket shutdown OK")
+        except:
+            pass
+        try:
             self.incoming_socket.close()
+            self.logger.debug("Testsocket Incoming-Socket close OK")
         except:
             pass
         try:
-            #self.outgoing_socket.shutdown(socket.SHUT_RDWR)
+            self.outgoing_socket.shutdown(socket.SHUT_RDWR)
+            self.logger.debug("Testsocket Outgoing-Socket shutdown OK")
+        except:
+            pass
+        try:
             self.outgoing_socket.close()
+            self.logger.debug("Testsocket Outgoing-Socket close OK")
         except:
             pass
-        try:
-            #self.sock.shutdown(socket.SHUT_RDWR)
-            self.sock.close()
-        except:
-            pass
+        
         self.alive = False
     
-    def issocketvalid(self, socket_instance):
-        """ Return True if this socket is connected. """
-        if not socket_instance:
-            return False
-
-        try:
-            socket_instance.getsockname()
-        except socket.error as err:
-            err_type = err.args[0]
-            if err_type == errno.EBADF:  # 9: Bad file descriptor
-                return False
-
-        err_type = None
-        try:
-            socket_instance.getpeername()
-        except socket.error as err:
-            err_type = err.args[0]
-        if err_type in [errno.EBADF, errno.ENOTCONN]:  # 9: Bad file descriptor.
-            return False  # 107: Transport endpoint is not connected
-
-        return True
 
         
         
@@ -271,9 +260,9 @@ class AlexaCamProxy4P3(SmartPlugin):
         self._proto = protocoll()
         self.cams = CamDevices()
         self.ClientThreads = []
-        self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.path_user_file,self.proxy_credentials,self.proxy_auth_type, self.onyl_allow_own_IP)
+        self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.path_user_file,self.proxy_credentials,self.proxy_auth_type, self.onyl_allow_own_IP,self.sh)
         self.service.name = 'AlexaCamProxy4P3-Handler'
-        self.TestSocket = TestSocket(self._proto, self.port)
+        self.TestSocket = TestSocket(self._proto, self.port, self.logger)
         self.TestSocket.name = 'AlexaCamProxy4P3-Testsocket'
         
         
@@ -333,6 +322,8 @@ class AlexaCamProxy4P3(SmartPlugin):
         #self.service.join()     # ????????????
         self.alive = True
         while self.alive:
+            pass
+            '''
             if len(self.ClientThreads ) > 0:
                 for t in self.ClientThreads:
                     if t.alive == False: 
@@ -351,11 +342,13 @@ class AlexaCamProxy4P3(SmartPlugin):
                         self.logger.debug("ProxyCam4AlexaP3: stopped Thread : %s " % Threadname)
 
             time.sleep(2)
-       
+            '''
         
 
     def stop(self):
         self.logger.info("Plugin '{}': stop method called".format(self.get_fullname()))
+        self.TestSocket.stop()
+        self.service.stop()
         try:
             self.service.sock.shutdown(socket.SHUT_RDWR)
             self.service.sock.close()
@@ -363,8 +356,8 @@ class AlexaCamProxy4P3(SmartPlugin):
             self.logger.info("Plugin '{}': Error while trying to close socket from Father-Thread : {}".format(self.get_fullname(),err))
             print ("Error while trying to close socket from Father-Thread",err)
             pass
-        self.service.stop()
-        self.TestSocket.stop()
+        
+        
         self.alive = False
     
     def CloseSockets(self,thread):
@@ -555,19 +548,30 @@ class WebInterface(SmartPluginWebIf):
         """
         returns a list of Threads as json structure
         """
-        sa_Skull = '<i style=color:  "black" class="fas fa-skull-crossbones"></i>'
-        sa_Running = '<i style=color: "green;" class="fas fa-play-circle"></i>'
+        sa_Skull = '<i style=color:black;" class="fas fa-skull-crossbones"></i>'
+        sa_Running = '<i style=color:green;" class="fas fa-play-circle"></i>'
         thread_data = []
         for t in self.plugin.service.ClientThreads:
             if t.alive == True:
                 try:
                     thread_dict = {
                                     'Thread' : t.name,
-                                    'real_URL' : t.actCam.real_Url
+                                    'real_URL' : t.actCam.real_Url,
+                                    'Status' : sa_Running
                                   }
                     thread_data.append(thread_dict)
-                except:
-                    self.logger.error('Error while build Threadlist for WebInterface')
+                except Exception as err:
+                    self.logger.error('Error while build Threadlist for WebInterface : {}'.format(err))
+            else:
+                try:
+                    thread_dict = {
+                                    'Thread' : t.name,
+                                    'real_URL' : t.actCam.real_Url,
+                                    'Status' : sa_Skull
+                                  }
+                    thread_data.append(thread_dict)
+                except Exception as err:
+                    self.logger.error('Error while build Threadlist for WebInterface : {}'.format(err))
         if len(thread_data) ==0:
             thread_dict = {
                             'Thread' : 'No Active Thread',
@@ -655,15 +659,30 @@ class WebInterface(SmartPluginWebIf):
         except:
             state_log_file = 'No Data available right now\n'
         
+        # Get own IP-Adress
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            myIP = (s.getsockname()[0])
+            s.close()
+        except:
+            myIP = ""
+            
         # Collect proxied Cams
         cam_proxied_items = []
+        _link = '<a href="rtsp://{}{}:5000/{}">{}</font></a>'
         myCams = self.plugin.cams.Cams
         for actCam in myCams:
             newEntry=dict()
             Cam2Add=self.plugin.cams.Cams.get(actCam)
+            _href = Cam2Add.proxied_Url.split("/")[-1]
+            if self.plugin.service.proxy_credentials != "" and self.plugin.service.proxy_auth_type != "NONE" :
+                _Credentials = self.plugin.service.proxy_credentials+'@'
+            else:
+                _Credentials = ""
             newEntry['name'] = Cam2Add.name
             newEntry['real_Url'] = Cam2Add.real_Url
-            newEntry['proxied_Url'] = Cam2Add.proxied_Url
+            newEntry['proxied_Url'] = (_link.format(_Credentials,myIP,_href ,Cam2Add.proxied_Url))
             newEntry['proxied_mb_Session'] = "%.1f" % 0.00
             newEntry['proxied_mb_total'] = "%.1f" % (Cam2Add.proxied_bytes / 1024.0 / 1024.0)
             newEntry['Sessions_total'] = Cam2Add.Sessions_total

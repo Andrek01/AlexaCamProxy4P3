@@ -30,11 +30,11 @@ function BuildThreads(result)
 {
     var temp ='';
     temp = '<div class="table-responsive" style="min-width: 500px;"><table class="table table-striped table-hover">';
-    temp = temp + '<thead><tr class="shng_heading"><th class="py-1">Thread-Name </th><th class="py-1">Real-URL</th><th align="right" class="py-1" >Status</th></tr></thead>';
+    temp = temp + '<thead><tr class="shng_heading"><th class="py-1">Thread-Name </th><th class="py-1">Real-URL</th><th align="right" class="py-1" style="text-align:center;" >Status</th></tr></thead>';
     temp = temp + '<tbody>';
 	
     $.each(result, function(index, element) {
-        temp = temp + '<a href="SelectListItem"><tr><td class="py-1">'+ element.Thread + '</td><td class="py-1">'+ element.real_URL +'</td><td class="py-1">'+ element.real_URL +'</td></tr>';
+        temp = temp + '<a href="SelectListItem"><tr><td class="py-1">'+ element.Thread + '</td><td class="py-1">'+ element.real_URL +'</td><td class="py-1" align="center">'+ element.Status +'</td></tr>';
     	        
     })
     temp = temp + '</tbody></table></div>';

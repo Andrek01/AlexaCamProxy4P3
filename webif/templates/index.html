@@ -185,10 +185,10 @@ TestSocket &nbsp;&nbsp;
 					<th>{{ _('Alexa-Item') }}</th>
                         		<th style="width: 200;"><font size="-1">{{ _('Proxy-URL') }}</th>
 					<th style="width: 200;"><font size="-1">{{ 'Real-URL´s' }}</th>
-					<th><font size="-1">MB proxied total</th>
-					<th><font size="-1">last Session</th>
-					<th><font size="-1">last Session duration</th>
-					<th><font size="-1">Sessions total</th>
+					<th style="width:70px;text-align:center"><font size="-1">MB proxied total</th>
+					<th style="width:300px;text-align:center"><font size="-1">last Session</th>
+					<th style="width:100px;text-align:center"><font size="-1">last Session duration</th>
+					<th style="width:100px;text-align:center"><font size="-1" style="width:100px"">Sessions total</th>
 					</tr>
 			</thead>
 			<tbody>
@@ -198,10 +198,10 @@ TestSocket &nbsp;&nbsp;
 					<td class="py-1"><font size="-1">{{ item.name }}</td>
 					<td class="py-1"><font size="-1">{{ item.proxied_Url }}</td>					
 					<td class="py-1"><font size="-1">{{ item.real_Url }}</td>					
-					<td align="right" class="py-1"><font size="-1">{{ item.proxied_mb_total }}</td>
-					<td align="right" class="py-1"><font size="-1">{{ item.last_Session }}</td>					
-					<td align="right" class="py-1"><font size="-1">{{ item.last_Session_duration }}</td>					
-					<td align="right" +class="py-1"><font size="-1">{{ item.Sessions_total }}</td>					
+					<td align="right" class="py-1" style="width:70px"><font size="-1">{{ item.proxied_mb_total }}</td>
+					<td align="center" class="py-1" style="width:300px>"><font size="-1">{{ item.last_Session }}</td>					
+					<td align="right" class="py-1" style="width:100px"><font size="-1">{{ item.last_Session_duration }}</td>					
+					<td align="center" class="py-1" style="width:100px"><font size="-1">{{ item.Sessions_total }}</td>					
 					
 					
 					

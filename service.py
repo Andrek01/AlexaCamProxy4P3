@@ -23,9 +23,12 @@ from random import random
 
 
 
+
+
 class ThreadedServer(threading.Thread):
-    def __init__(self,Proto, logger,port, video_buffer,cert_path,cert_path_key, Cams, ClientThreads,proxyUrl,path_user_file,proxy_credentials,proxy_auth_type,onyl_allow_own_IP):
+    def __init__(self,Proto, logger,port, video_buffer,cert_path,cert_path_key, Cams, ClientThreads,proxyUrl,path_user_file,proxy_credentials,proxy_auth_type,onyl_allow_own_IP,sh_instance):
         threading.Thread.__init__(self)
+        self.sh = sh_instance
         self.logger = logger
         self.port = int(port)
         self.video_buffer = int(video_buffer)
@@ -69,10 +72,17 @@ class ThreadedServer(threading.Thread):
         self.logger.info("ProxyCamAlexaP4: service stopping")
         self.running= False
         self.logger.info("ProxyCamAlexaP4: set running to false")
-        self.sock.shutdown(socket.SHUT_RDWR)
-        self.logger.info("ProxyCamAlexaP4: shutdown socket")
-        self.sock.close()
-        self.logger.info("ProxyCamAlexaP4: closed socket")
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+            self.logger.info("ThreadedServer - shutdown socket")
+        except:
+            pass
+        try:
+            self.sock.close()
+            self.logger.info("ThreadedServer - closed socket")
+        except:
+            pass
+        
     
         
     def run(self):
@@ -116,7 +126,8 @@ class ThreadedServer(threading.Thread):
                 client.close()
                 continue
 
-            client.settimeout(5)
+            #client.settimeout(5)
+            #conn.setblocking(0)
  
             try:
                 # Clean up old Threads
@@ -126,15 +137,18 @@ class ThreadedServer(threading.Thread):
                             t.actCam.proxied_bytes +=t.proxied_bytes
                             self.ClientThreads.remove(t)
                         except:
+                            self._proto.addEntry('ERROR   ',"While storing proxied Bytes to : {}".format(t.name))
                             pass
                         
-                self.ClientThreads.append(ProxySocket(self._proto,conn,address,self.logger,self.Cams,self.video_buffer,self.path_user_file,self.proxy_credentials,self.proxy_auth_type,self.proxyUrl,self.port))
+                self.ClientThreads.append(ProxySocket(self._proto,conn,address,self.logger,self.Cams,self.video_buffer,self.path_user_file,self.proxy_credentials,self.proxy_auth_type,self.proxyUrl,self.port,self.sh))
                 aktThread +=1
                 if aktThread > 99999:
                     aktThread = 1
                 lastAdded = len(self.ClientThreads )-1
                 NewThreadName ="CamThread-{0:06d}".format(aktThread)
                 self.ClientThreads[lastAdded].name = NewThreadName
+                self.ClientThreads[lastAdded].message_queues[conn] = []
+
 
                 self.logger.info("ProxyCam4AlexaP3: Added Thread %s" % NewThreadName)
                 self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: Added Thread %s" % NewThreadName)
@@ -149,20 +163,21 @@ class ThreadedServer(threading.Thread):
             
             
 class ProxySocket(threading.Thread):
-    def __init__(self,Proto, client, address,logger,cams,videoBuffer=524280, path_User_File = '',proxy_credentials='',proxy_auth_type='NONE',proxy_Url = None,port=0):
+    def __init__(self,Proto, client, address,logger,cams,videoBuffer=524280, path_User_File = '',proxy_credentials='',proxy_auth_type='NONE',proxy_Url = None,port=0, sh_instance = None):
         threading.Thread.__init__(self)
+        self.sh = sh_instance
         self.logger = logger
         self.mysocks = []
         self.client = client
-        self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server = None
         self.mysocks.append(client)
-        self.mysocks.append(self.server)
+        self.message_queues = {}
         self.server_url = False
         self.alive = False
         self.serversend = 0
         self.BUFF_SIZE_SERVER=videoBuffer
         self.cams = cams
-        self.proxied_bytes = 0
+        self.proxied_bytes = 0.0
         self.peer = ''
         self.actCam = None
         self.last_Session_Start = datetime.now()
@@ -181,26 +196,28 @@ class ProxySocket(threading.Thread):
         self.client_last_Cseq = 0
         self.server_last_Cseq = 1
         self.authenticate = ""
+        self.server_describe = ""
+        self.org_Describe = None
+        self.BUFF_SIZE_CLIENT=4096
+        
+        
         
 
 
         
     def stop(self, txtInfo = ''):
-        if txtInfo=='Server socket is dead':
-            pass
-        self.logger.debug("ProxyCam4AlexaP3: Cam Thread stopped")
-        self.mysocks.remove(self.client)
-        self.mysocks.remove(self.server)
-        try:
-            self.client.shutdown(socket.SHUT_RDWR)
-            self.client.close()
-        except Exception as err:
-            self.logger.debug("ProxyCam4AlexaP3: Cam Thread cannot close client-socket - {}".format(err))
-        try:
-            self.server.shutdown(socket.SHUT_RDWR)
-            self.server.close()
-        except Exception as err:
-            self.logger.debug("ProxyCam4AlexaP3: Cam Thread cannot close Server-socket-{}".format(err))
+        self.logger.debug("{} got STOP signal ".format(self.name))
+        self._proto.addEntry('INFO    ',"{} got STOP signal ".format(self.name))
+        for s in self.mysocks:
+            try:
+                s.shutdown(socket.SHUT_RDWR)
+            except Exception as err:
+                self.logger.debug("Cam Thread cannot shutdown Socket - {}".format(s))
+            try:
+                s.close()
+            except Exception as err:
+                self.logger.debug("Cam Thread cannot close Socket - {}".format(s))
+
         self.logger.debug("ProxyCam4AlexaP3: Cam Thread stopped - %s" % txtInfo)
         self._proto.addEntry('INFO    ','stopped  Thread {} Reason : {}'.format(self.name, txtInfo))
         self.actCam.proxied_bytes +=self.proxied_bytes
@@ -213,9 +230,6 @@ class ProxySocket(threading.Thread):
         self.alive = False
         #self.ClientThreads.remove(self)
         
-    def Test(self):
-        pass
-         
     
     def CreateBasicAuthResponse(self):
         AuthResp = 'RTSP/1.0 401 Unauthorized\r\n'
@@ -245,14 +259,13 @@ class ProxySocket(threading.Thread):
 
         
     def run(self):
-        BUFF_SIZE_CLIENT=4096
-        BUFF_SIZE_SERVER=self.BUFF_SIZE_SERVER
+        
         self.logger.info("ProxyCam4AlexaP3: Cam Thread startet")
         self.alive = True
         serverblock = b''
         clientblock = b''
         loopcount =0
-        server_describe = ""
+        
         
         
         if 'NONE' in self.proxy_auth_type:
@@ -260,276 +273,287 @@ class ProxySocket(threading.Thread):
             self.Credentials_Checked = True
             self._proto.addEntry('INFO    ','Allowed Access without Authorization - NONE')
             self.logger.debug('Allowed Access without Authorization - NONE')
-
                     
         while self.alive:
-            if loopcount==50:
-                #self.logger.debug("ProxyCam4AlexaP3: Cam Thread running in loop-{}".format(self._name))
-                loopcount=0
-            else:
-                loopcount +=1
-            # check if all sockets are online
-            if not self.issocketvalid(self.client):
-                self.stop('Client socket is dead')
-                continue        # loop
-            if not self.server and self.server_url: # and not self.issocketvalid(self.server) ???? When has state 107 passed ??? 
-                self.stop('Server socket is dead')
-                continue        # loop
-            readable, writable, exceptional = select.select(self.mysocks, self.mysocks, [])
-            #self.logger.debug("Got readable socket")
+            readable, writable, exceptional = select.select(self.mysocks, self.mysocks, [],3)
             for myActSock in readable:
                 if myActSock == self.server:
                     try:
-                        if self.server_url:
-                            serverblock = b''
-                            while True:
-                                serverdata = self.server.recv(BUFF_SIZE_SERVER)
-                                if serverdata:
-                                    serverblock += serverdata
-                                if len(serverdata) < BUFF_SIZE_SERVER:
-                                    break
-                        
-                        if serverblock:
-                            try:
-                                if "\r\n" in serverblock.decode():
-                                    self._proto.addEntry('INFO S>P',serverblock.decode())
-                                    self._proto.addEntry('INFO    ',"Block-length : {}".format(len(serverblock.decode())))
-                            except:
-                                pass
-                            try:
-                                if ( not self.server_auth and "WWW-Authenticate" in serverblock.decode()):
-                                    self._proto.addEntry('INFO S>P',"Got WWW-Authenticate from Camera\r\n"+ serverblock.decode())
-                                    # inject Authorization in server_describe
-                                    if (server_describe != ""):
-                                        myResponse = self.server_add_authorization(serverblock.decode(),server_describe.decode())
-                                        myResponse = self._inject_sequence_no(myResponse.encode(),self.server_last_Cseq)
-                                        self.server_last_Cseq += 1
-                                        self.server.sendall(myResponse)
-                                        self._proto.addEntry('INFO P>S',"Send Authorization to Camera\r\n"+ myResponse.decode())
-                                        self.server_auth = True
-                                        continue
-                                
-                            except:
-                                pass
-                                
-                                
-                            
-                            # send data from Server to Client
-                            try:
-                                serverblock = self._inject_sequence_no(serverblock, self.client_last_Cseq)
-                                #serverblock = self.DeleteAuthoriziation(serverblock.decode()).encode()
-                                
-                            except:
-                                #self._proto.addEntry('ERROR   ',"ERROR while injecting last client sequence")
-                                pass
-                            
-                            try:
-                                if "\r\n" in serverblock.decode():
-                                    self._proto.addEntry('INFO P>C',serverblock.decode())
-                                    self._proto.addEntry('INFO    ',"Block-length : {}".format(len(serverblock.decode())))
-                            except:
-                                pass
-                            
-                            if (not "RTSP/1.0 400 Bad Request" in serverblock.decode()):
-                                self.client.send(serverblock)
-                            
-
-                            if self.actCam != None:
-                                try:
-                                    self.proxied_bytes += len(serverblock)
-                                except Exception as err:
-                                    self.logger.info("Server-Block inconsistent")
-
-                    except Exception as err:
-                        self.logger.info("ProxyCam4AlexaP3: Server disconnected right now not connected - {}".format(err))
+                        self._handleServerBlock(myActSock)
+                    except:
+                        self._proto.addEntry('ERROR   ','Problem while getting Server-DATA')
                         pass
+
                 elif myActSock == self.client:
                     try:
-                        
-                        try:
-                            self.peer = self.client.getpeername()[0]
-                        except Exception as err:
-                            self.logger.info("Problem by by getting Peer-Name")
-
-                        clientblock = b''
-                        while True:
-                            clientdata = self.client.recv(BUFF_SIZE_CLIENT)
-                            if clientdata:
-                                clientblock += clientdata
-                            if len(clientdata) < BUFF_SIZE_CLIENT:
-                                break
-
-                        
-                        
-                        if clientblock:
-                            self.logger.debug("ProxyCam4AlexaP3: Client-Message-{}".format(str(clientblock.decode())))
-                            self._proto.addEntry('INFO C>P','Client-Message-{}'.format(str(clientblock.decode())))
-                            self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
-                            
-                            try:
-                                self.client_last_Cseq = self._get_sequence_no(clientblock)
-                            except:
-                                pass
-                                
-                            
-                                        
-                                
-                            # Keep Describe to Server in mind
-                            if ('DESCRIBE' in clientblock.decode() and server_describe == "" and not 'OPTIONS' in clientblock.decode()):
-                                server_describe = self._inject_sequence_no(clientblock, self.server_last_Cseq)
-                                server_describe = self.InjectRealUrl(server_describe)
-                                if server_describe == False:
-                                    self.stop("Error while InjetRealURL")
-                                self._proto.addEntry('INFO    ',"reminded parsed DESCRIBE from Client\r\n"+server_describe.decode())
-                                
-                                
-                            if (self.Authorization_send == False):    
-                                if 'DIGEST' in self.proxy_auth_type:
-                                    AuthResponse = self.CreateDigestAuthResponse().encode()
-                                    AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
-                                    self.client.sendall(AuthResponse)
-                                    self.Authorization_send = True
-                                    self.logger.debug(self.CreateDigestAuthResponse())
-                                    self._proto.addEntry('INFO P>C',AuthResponse.decode())
-                                    continue
-                                elif 'BASIC' in self.proxy_auth_type:
-                                    AuthResponse =self.CreateBasicAuthResponse().encode()
-                                    AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
-                                    self.client.sendall(AuthResponse)
-                                    self.Authorization_send = True
-                                    self.logger.debug(self.CreateBasicAuthResponse())
-                                    self._proto.addEntry('INFO P>C',AuthResponse.decode())
-                                    continue
-
-                                
-                            # Authorization arrives
-                            if ('Authorization:' in clientblock.decode() and not self.Credentials_Checked):
-
-                                self.Credentials_Checked = self.CheckAuthorization(clientblock.decode('utf-8'))
-                                if not self.Credentials_Checked:
-                                    ForbiddenResponse =self.CreateForbiddenResponse().encode()
-                                    ForbiddenResponse = self._inject_sequence_no(ForbiddenResponse,self.client_last_Cseq)
-                                    self.client.sendall(ForbiddenResponse)
-                                    self.logger.debug(self.CreateForbiddenResponse())
-                                    self._proto.addEntry('INFO P>C',ForbiddenResponse.decode())
-                                    self.stop('Authorization failed 403')
-                                    self._proto.addEntry('INFO P>C','Authorization failed 403')
-                                    continue
-                                else:
-                                    self._proto.addEntry('INFO P>C','Client - Authorization OK')
-                            
-                            
-                            
-                            
-                            if ('DESCRIBE' in clientblock.decode() and server_describe != ""):
-                                injectedUrl = server_describe
-                                self.logger.debug("Client-Msg-injected : {}".format(str(injectedUrl.decode())))
-                                self._proto.addEntry('INFO    ',"Client-Msg-injected\r\n{}".format(str(injectedUrl.decode())))
-                                
-                                clientblock = injectedUrl
-                                
-
-                                
-                            
-                            
-                                   
-                            # Send data to Server if connected
-                                                        
-                            try:
-                                if self.Credentials_Checked:
-                                    if ('Authorization:' in clientblock.decode()):
-                                        myClientBlock = self.DeleteAuthoriziation(clientblock.decode())
-                                        clientblock = myClientBlock.encode()
-                                         
-                                    
-
-                                    try:
-                                        self._inject_sequence_no(clientblock,self.server_last_Cseq)
-                                        self.server_last_Cseq += 1
-                                        if (self.authenticate != ""):
-                                            clientblock = self._inject_line(clientblock, self.authenticate)
-                                    except err as Exception:
-                                        self._proto.addEntry('ERROR   ',"While inject_squence in Clientblock/add authenticate {}".format(err))
-                                        pass
-                                    
-                                    if not self.server_url and self.Credentials_Checked == True:
-                                        try:
-                                            try:
-                                                serverUrl, serverport,self.actCam =self.getUrl(clientblock.decode())
-                                                if serverUrl == False:
-                                                    # found no Cam
-                                                    self.stop('Found no Cam !!')
-                                            except Exception as err:
-                                                self.logger.debug("Error while parsing real URL")
-                                                self.stop('Found no Cam !!')
-                                            try:
-                                                try:
-                                                    self.server.connect((serverUrl, int(serverport)))
-                                                    self.server_url = True
-                                                    self.logger.debug("ProxyCam4AlexaP3: connected to Camera")
-                                                    self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: connected to Camera")
-                                                except:
-                                                    self.logger.warning("could not connected to Camera : {}".format(serverUrl))
-                                                    self._proto.addEntry('ERROR   ',"could not connected to Camera : {}".format(serverUrl))
-                                                    self.stop("not Connection to Camera")
-                                            except Exception as err:
-                                                self.logger.debug("not able to connect to Server-{}".format(err))
-                                                self.stop('Exception see log-file')
-                                            
-                                        except Exception as err:
-                                            self.logger.debug("got no ServerUrl / ServerPort / ActualCam :{}".format(err))
-                                            self.stop('Exception see log-file')
-                                    
-                                    
-                                    self.server.sendall(clientblock)
-                                    if "\r\n" in clientblock.decode():
-                                        self._proto.addEntry('INFO P>S',clientblock.decode())
-                                        self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
-                            except err as Exception:
-                                self.logger.debug("Error while server-send {}".format(err))
-
-                                
-                            if 'TEARDOWN' in clientblock.decode():
-                                self.stop('TEARDOWN')
-                            if 'PAUSE' in clientblock.decode():
-                                self.stop('PAUSE')
-
-                        else:
-                            self.stop('Client-hang up')
-                            #self.stop('Client-Message hang up')
-                            #continue        # loop
-                            #self.logger.debug("ProxyCam4AlexaP3: Client-Message hang up")
-                            
-                            #raise
-                            #pass # error('Client disconnected')
-                    except err as Exception:
-                        self.logger.debug("ProxyCam4AlexaP3: Error in Client-Block-{}".format(err))
-                        self.stop('Error in Client-Block')
+                        self._handleClientBlock(myActSock)
+                    except:
+                        self._proto.addEntry('ERROR   ','Problem while getting Client-DATA')
                         pass
-                        #return False
+                    
+            for myActSock in writable:
+                if len(self.message_queues[myActSock]) >= 1:
+                    try:
+                        next_msg = b''
+                        next_msg = self.message_queues[myActSock][0]
+                        del self.message_queues[myActSock][0]
+                        if myActSock == self.server:
+                            myRcv = 'P>S' 
+                            
+                        else:
+                            myRcv = 'P>C'
+                        
+                        self._proto.addEntry('INFO    ','Send-Message to : {}'.format(myActSock))
+                        myActSock.send(next_msg)
+                        self._proto.addEntry('INFO    ',next_msg.decode())
+                        self._proto.addEntry('INFO    ',"Block-length : {}".format(len(next_msg.decode())))
+                        self._proto.addEntry('INFO '+myRcv,'sending DATA to {}'.format(myActSock.getpeername()[0]))
+                        self.logger.debug('sending DATA to {}'.format(myActSock.getpeername()[0]))
+                    
 
-    def issocketvalid(self, socket_instance):
-        """ Return True if this socket is connected. """
-        if not socket_instance:
-            return False
+                    except err as Exception:
+                        self._proto.addEntry('ERROR   ','While sending to Socket : {}'.format(err))
+                        continue
+                else:
+                    pass
+                    #self._proto.addEntry('INFO    ','No Data for writable Socket : {}'.format(myActSock))
 
+        self.Stop("not Alive any longer")
+    
+    def _handleServerBlock(self, mySocket):
         try:
-            socket_instance.getsockname()
-        except socket.error as err:
-            err_type = err.args[0]
-            if err_type == errno.EBADF:  # 9: Bad file descriptor
-                return False
+            if self.server_url:
+                serverblock = b''
+                while True:
+                    serverdata = mySocket.recv(self.BUFF_SIZE_SERVER)
+                    if serverdata:
+                        serverblock += serverdata
+                    if len(serverdata) < self.BUFF_SIZE_SERVER:
+                        break
+            
+                
+            if serverblock:
+                try:
+                    if "\r\n" in serverblock.decode():
+                        self._proto.addEntry('INFO S>P',serverblock.decode())
+                        #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(serverblock.decode())))
+                except:
+                    pass
+                
+                try:
+                    self.proxied_bytes += len(serverblock)
+                    self.logger.error("added proxied bytes")
+                except Exception as err:
+                    self.logger.error("Server-Block inconsistent")
+                    self._proto.addEntry('INFO    ',"Server-Block inconsistent during adding proxied bytes")
+                
+                try:
+                    if ( not self.server_auth and "WWW-Authenticate" in serverblock.decode()):
+                        self._proto.addEntry('INFO S>P',"Got WWW-Authenticate from Camera\r\n"+ serverblock.decode())
+                        # inject Authorization in self.server_describe
+                        if (self.server_describe != ""):
+                            myResponse = self.server_add_authorization(serverblock.decode(),self.server_describe.decode())
+                            myResponse = self._inject_line(self.server_describe, self.authenticate)
+                            myResponse = self._inject_sequence_no(myResponse,self.server_last_Cseq)
+                            self.server_last_Cseq += 1
+                            #self.server.sendall(myResponse)
+                            self.message_queues[self.server].append(myResponse)
+                            self._proto.addEntry('INFO P>S',"Send Authorization to Camera\r\n"+ myResponse.decode())
+                            self.server_auth = True
+                            return
+                    
+                except Exception as err:
+                    self._proto.addEntry('ERROR   ',"While Authentication".format(err))
+                    pass
+                    
+                    
+                
+                # send data from Server to Client
+                try:
+                    serverblock = self._inject_sequence_no(serverblock, self.client_last_Cseq)
+                    
+                except:
+                    #self._proto.addEntry('ERROR   ',"ERROR while injecting last client sequence")
+                    pass
+                
+                try:
+                    if "\r\n" in serverblock.decode():
+                        self._proto.addEntry('INFO P>C',serverblock.decode())
+                        #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(serverblock.decode())))
+                except:
+                    pass
 
-        err_type = None
+                self.message_queues[self.client].append(serverblock)
+
+                
+    
+        except Exception as err:
+            self.logger.info("ProxyCam4AlexaP3: Server disconnected right now not connected - {}".format(err))
+            pass
+
+    def _handleClientBlock(self, mySocket):
         try:
-            socket_instance.getpeername()
-        except socket.error as err:
-            err_type = err.args[0]
-        if err_type in [errno.EBADF, errno.ENOTCONN]:  # 9: Bad file descriptor.
-            return False  # 107: Transport endpoint is not connected
+            self.peer = mySocket.getpeername()[0]
+        except Exception as err:
+            self.logger.info("Problem by by getting Peer-Name")
 
-        return True
+        clientblock = b''
+        while True:
+            clientdata = mySocket.recv(self.BUFF_SIZE_CLIENT)
+            if clientdata:
+                clientblock += clientdata
+            if len(clientdata) < self.BUFF_SIZE_CLIENT:
+                break
 
+        
+        
+        if clientblock:
+            self.logger.debug("ProxyCam4AlexaP3: Client-Message-{}".format(str(clientblock.decode())))
+            self._proto.addEntry('INFO C>P','Client-Message-{}'.format(str(clientblock.decode())))
+            self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
+            
+            try:
+                self.client_last_Cseq = self._get_sequence_no(clientblock)
+            except:
+                pass
+                
+            
+                        
+            
+            
+            # Keep Describe to Server in mind
+            if ('DESCRIBE' in clientblock.decode() and self.server_describe == "" and not 'OPTIONS' in clientblock.decode()):
+                self.org_Describe = clientblock
+                self.server_describe = self._inject_sequence_no(clientblock, self.server_last_Cseq)
+                self.server_describe = self.InjectRealUrl(self.server_describe)
+                if self.server_describe == False:
+                    self.stop("Error while InjetRealURL")
+                self._proto.addEntry('INFO    ',"reminded parsed DESCRIBE from Client\r\n"+self.server_describe.decode())
+                
+                
+            if (self.Authorization_send == False):    
+                if 'DIGEST' in self.proxy_auth_type:
+                    AuthResponse = self.CreateDigestAuthResponse().encode()
+                    AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
+                    self.message_queues[self.client].append(AuthResponse)
+                    #self.client.sendall(AuthResponse)
+                    self.Authorization_send = True
+                    self.logger.debug(self.CreateDigestAuthResponse())
+                    self._proto.addEntry('INFO P>C',AuthResponse.decode())
+                    return
+                elif 'BASIC' in self.proxy_auth_type:
+                    AuthResponse =self.CreateBasicAuthResponse().encode()
+                    AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
+                    self.message_queues[self.client].append(AuthResponse)
+                    #self.client.sendall(AuthResponse)
+                    self.Authorization_send = True
+                    self.logger.debug(self.CreateBasicAuthResponse())
+                    self._proto.addEntry('INFO P>C',AuthResponse.decode())
+                    return
+
+                
+            # Authorization arrives
+            if ('Authorization:' in clientblock.decode() and not self.Credentials_Checked):
+
+                self.Credentials_Checked = self.CheckAuthorization(clientblock.decode('utf-8'))
+                if not self.Credentials_Checked:
+                    ForbiddenResponse =self.CreateForbiddenResponse().encode()
+                    ForbiddenResponse = self._inject_sequence_no(ForbiddenResponse,self.client_last_Cseq)
+                    #self.client.sendall(ForbiddenResponse)
+                    self.message_queues[self.client].append(ForbiddenResponse)
+                    self.logger.debug(self.CreateForbiddenResponse())
+                    self._proto.addEntry('INFO P>C',ForbiddenResponse.decode())
+                    self.stop('Authorization failed 403')
+                    self._proto.addEntry('INFO P>C','Authorization failed 403')
+                    return
+                else:
+                    self._proto.addEntry('INFO P>C','Client - Authorization OK')
+            
+            
+            
+            
+            if ('DESCRIBE' in clientblock.decode() and self.server_describe != ""):
+                injectedUrl = self.server_describe
+                self.logger.debug("Client-Msg-injected : {}".format(str(injectedUrl.decode())))
+                self._proto.addEntry('INFO    ',"Client-Msg-injected\r\n{}".format(str(injectedUrl.decode())))
+                
+                clientblock = injectedUrl
+                
+
+                
+            
+            
+                   
+            # Send data to Server if connected
+                                        
+            try:
+                if self.Credentials_Checked:
+                    if ('Authorization:' in clientblock.decode()):
+                        myClientBlock = self.DeleteAuthoriziation(clientblock.decode())
+                        clientblock = myClientBlock.encode()
+                         
+                    
+
+                    try:
+                        self._inject_sequence_no(clientblock,self.server_last_Cseq)
+                        self.server_last_Cseq += 1
+                        if (self.authenticate != ""):
+                            clientblock = self._inject_line(clientblock, self.authenticate)
+                    except err as Exception:
+                        self._proto.addEntry('ERROR   ',"While inject_squence in Clientblock/add authenticate {}".format(err))
+                        pass
+                    
+                    if not self.server_url and self.Credentials_Checked == True:
+                        try:
+                            try:
+                                serverUrl, serverport,self.actCam =self.getUrl(clientblock.decode())
+                                if serverUrl == False:
+                                    # found no Cam
+                                    self.stop('Found no Cam !!')
+                            except Exception as err:
+                                self.logger.debug("Error while parsing real URL")
+                                self.stop('Found no Cam !!')
+                            try:
+                                try:
+                                    self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                                    self.server.connect((serverUrl, int(serverport)))
+                                    self.mysocks.append(self.server)
+                                    self.message_queues[self.server] = []
+                                    self.server_url = True
+                                    self.logger.debug("ProxyCam4AlexaP3: connected to Camera")
+                                    self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: connected to Camera")
+                                except:
+                                    self.logger.warning("could not connected to Camera : {}".format(serverUrl))
+                                    self._proto.addEntry('ERROR   ',"could not connected to Camera : {}".format(serverUrl))
+                                    self.stop("not Connection to Camera")
+                            except Exception as err:
+                                self.logger.debug("not able to connect to Server-{}".format(err))
+                                self.stop('Exception see log-file')
+                            
+                        except Exception as err:
+                            self.logger.debug("got no ServerUrl / ServerPort / ActualCam :{}".format(err))
+                            self.stop('Exception see log-file')
+                    
+                    
+                    #self.server.sendall(clientblock)
+                    self.message_queues[self.server].append(clientblock)
+                    if "\r\n" in clientblock.decode():
+                        self._proto.addEntry('INFO P>S',clientblock.decode())
+                        #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
+            except err as Exception:
+                self.logger.debug("Error while server-send {}".format(err))
+
+                
+            if 'TEARDOWN' in clientblock.decode():
+                self.stop('TEARDOWN')
+            if 'PAUSE' in clientblock.decode():
+                self.stop('PAUSE')
+
+        else:
+            pass
+            #self.stop('Client-hang up')
+
+    
 
     def getUrl(self, request):
         port = ''
@@ -545,7 +569,7 @@ class ProxySocket(threading.Thread):
         else:
             temp = url[(http_pos + 3):]  # get the rest of url
 
-        temp=url.split("/")[len(url.split("/"))-1]    
+        temp=url.split("/")[-1]    
         myCam = None
         try:
             myCam = self.cams.get(temp)
@@ -887,7 +911,7 @@ class ProxySocket(threading.Thread):
                                              PropValues["algorithm"],
                                              PropValues["entity_body"])
             
-            myAuth = 'Authorization: Digest username="'+PropValues["username"]+'", realm="'+PropValues["realm"]+'", nonce="'+ PropValues["nonce"] +'", uri="'+PropValues["uri"]+'", response="'+myNonce+'"'+"\r\n\r\n"
+            myAuth = 'Authorization: Digest username="'+PropValues["username"]+'", realm="'+PropValues["realm"]+'", nonce="'+ PropValues["nonce"] +'", uri="'+PropValues["uri"]+'", response="'+myNonce+'"'# +"\r\n"
 
             newResponse.append(myAuth)
         
