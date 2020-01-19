@@ -88,9 +88,10 @@ AlexaCamProxy4P3:
     proxy_url: '<your.domain.net>'
     proxy_credentials: '<user>:<pwd>'
     proxy_auth_type: 'DIGEST'
-    onyl_allow_own_IP: true
+    only_allow_own_IP: true
 ```
 
+<strong>Please do not use "proxy" in your proxy_credentials. On Test-Sockets the VLC-Player will get in trouble with it, because there is a special handling for "proxy:" in VLC-Player</strong>
 
 cert_path : File with your fullchain.pem for the URL where you want to reach your  proxied cameras
 

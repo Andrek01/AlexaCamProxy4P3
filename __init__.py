@@ -892,6 +892,8 @@ class WebInterface(SmartPluginWebIf):
         try:
             if self.plugin.TestSocket.alive:
                 testsocket_active = "checked"
+            else:
+                testsocket_active = ""                
         except:
             testsocket_active = ""
         tmpl = self.tplenv.get_template('index.html')
