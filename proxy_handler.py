@@ -26,7 +26,7 @@ class Sender(threading.Thread):
         self._proto = proto
         self.socks_write = []
         self.message_queues = message_queues
-        self.debug_level = 0
+        self.debug_level = 99
         self.client = None
         self.server = None
     
