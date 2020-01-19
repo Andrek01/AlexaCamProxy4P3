@@ -1,19 +1,108 @@
 window.addEventListener("resize", resizeItemTree, false);
 
+//*************************************************************
+// check Auto-Updates for protocols
+//*************************************************************
+setInterval(Checkupdate4Protocolls, 2000);
+
+
+
+
+function DeleteProto(btn_Name)
+{
+     $.ajax({
+    url: "clear_proto.html",
+    type: "GET",
+    data: { proto_Name : btn_Name
+          },
+    contentType: "application/json; charset=utf-8",
+    success: function (response) {
+            statelogCodeMirror.setValue("");
+    },
+    error: function () {
+        console.log("Error - while clearing Protocol :"+btn_Name)
+    }
+     });
+}
+
+//*************************************************************
+// check Toggle-Switches
+//*************************************************************
 function ToggleTrigger(myID) {
  myValue = document.getElementById(myID).checked
- switch (myParam) {
+ switch (myID) {
 	case 'toggleTestSocket':
 		{
-			if (myValue == 'True')
-			{
-			
-			}
-            else
-            {
-            }
-			break;
+	    $.ajax({
+		    url: "toggle_TestSocket.html",
+		    type: "GET",
+		    data: { enabled : myValue
+		          },
+		    contentType: "application/json; charset=utf-8",
+		    success: function (response) {
+			    console.log("OK - TestSocket-State changed");
+		    },
+		    error: function () {
+                console.log("Error - while changing TestSocket-State")
+		    }
+	    });
+        break;
 		}
+    }
+}
+
+
+//*************************************************************
+// Auto-Update-Timer for protocol - States
+//*************************************************************
+
+function UpdateProto(proto_Name)
+{
+	$.ajax({
+		url: "get_proto.html",
+		type: "GET",
+		data: { proto_Name : proto_Name
+		      },
+		contentType: "application/json; charset=utf-8",
+		success: function (response) {
+				actProto(response,proto_Name);
+		},
+		error: function () {
+            console.log("Error - while updating Protocol :"+proto_Name)
+		}
+	});
+};
+
+//*************************************************************
+// check Auto-Updates for protocols
+//*************************************************************
+function Checkupdate4Protocolls()
+{ 
+    UpdateLog = document.getElementById("proto_states_check").checked
+
+    if (UpdateLog == true)
+    {
+     UpdateProto('proto_states_check')
+    }
+
+}
+//*************************************************************
+// actualisation of Protocol
+//*************************************************************
+function actProto(response,proto_Name)
+{
+    myProto = document.getElementById(proto_Name)
+    myProto.value = ""
+    myText = ""
+    var objResponse = JSON.parse(response)
+    for (x in objResponse)
+        {
+         myText += objResponse[x]+"\n"
+        }
+    myProto.value = myText
+    if (proto_Name == 'proto_states_check')
+    {
+        statelogCodeMirror.setValue(myText)
     }
 }
 

@@ -47,7 +47,8 @@ import json
 import signal
 
 from .service import ThreadedServer
-
+from .proxy_handler import Sender
+import queue
 
 # Imports for TestSocket
 import socket
@@ -55,6 +56,8 @@ import threading
 import select
 import ssl
 import errno
+
+
 
 class protocoll(object):
     
@@ -68,8 +71,8 @@ class protocoll(object):
         if (myLog == None):
             return
         try:
-            if len (myLog) >= 500:
-                myLog = myLog[0:499]
+            if len (myLog) >= 1500:
+                myLog = myLog[0:1499]
         except:
             return
         myEntries = _text.split('\r\n')
@@ -84,16 +87,22 @@ class protocoll(object):
 
 
 class TestSocket(threading.Thread):
-    def __init__(self,Proto, port, logger):
+    def __init__(self,Proto, port, logger,video_buffer,sh_instance):
         threading.Thread.__init__(self)
         self._proto = Proto
         self.port = port
         self.logger = logger
+        self.sh = sh_instance
         self._proto.addEntry('INFO    ',"Testsocket initialized")
         self.outgoing_socket = None
         self.incoming_socket = None
         self.mysocks = []
+        self.alive = False
+        self.message_queues = {}
+        self.queue_counter = 0
+        self.video_buffer = video_buffer
         
+
     def run(self):
         self._proto.addEntry('INFO    ',"Testsocket started")
         self.logger.info("Testsocket started")
@@ -101,51 +110,82 @@ class TestSocket(threading.Thread):
         self.cycle = True
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         #self.sock.setblocking(0)
-        self.sock.bind(('', 5000))
+        self.sock.bind(('', 5001))
         self.sock.listen(5)
         wrappedSocket = None
         while self.alive:
             try:
                 self.incoming_socket, address = self.sock.accept()
             except Exception as err:
-                pass
+                self.logger.warning('Listening socket for Testsocket could not be opened')
+            #    #raise
+                raise 
             try:
                 # Connect to AlexCamProxy4P3
                 self.incoming_socket.setblocking(0)
-                self.incoming_socket.settimeout(1)
+                self.incoming_socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,1)
+                #self.mysocks.append(self.incoming_socket)
+                #self.message_queues[self.incoming_socket] = []
+                # Setup the Sender-Thread
+                self.mysocks.append(self.incoming_socket)
+                self.Sender = Sender( self._proto,self.logger,self.sh,self.message_queues)
+                self.Sender.client = self.incoming_socket
+                self.Sender.message_queues[self.incoming_socket] = queue.Queue()
+                self.Sender.socks_write.append(self.incoming_socket)
+                self.Sender.name = self.name + "-Sender"
+                self.Sender.start()
+                
+                
+                
                 if wrappedSocket == None:
                     self.outgoing_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    self.outgoing_socket.setblocking(0)
-                    self.outgoing_socket.settimeout(1)
                     # WRAP SOCKET
                     wrappedSocket = ssl.wrap_socket(self.outgoing_socket, do_handshake_on_connect=True)
                     # CONNECT AND PRINT REPLY
                     
-                    #wrappedSocket.connect(("80.151.66.146", self.port))
                     wrappedSocket.connect(("127.0.0.1", self.port))
+                    wrappedSocket.setblocking(0)
+                    wrappedSocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,1)
+                    self.mysocks.append(wrappedSocket)
+                    #self.message_queues[wrappedSocket] = []
+                    self.Sender.server = wrappedSocket
+                    self.Sender.message_queues[wrappedSocket] = queue.Queue()
+                    self.Sender.socks_write.append(wrappedSocket)
+                    
                 
                 #self.outgoing_socket.connect(("192.168.178.37", 443))
-                self.mysocks.append(self.incoming_socket)
-                if not wrappedSocket in self.mysocks:
-                    self.mysocks.append(wrappedSocket)
+                
+                #if not wrappedSocket in self.mysocks:
+                #    self.mysocks.append(wrappedSocket)
                 self.cycle = True
                 while True:
                     if self.cycle == False:
                         break
                     else:
-                        readable, writable, exceptional = select.select(self.mysocks, [self.incoming_socket], [self.incoming_socket])
+                        #time.sleep(0.0001)       # give other Threads a Chance
+                        readable, writable, exceptional = select.select(self.mysocks, [], self.mysocks,3)
                         for myActSock in readable :
-                            
+                            '''
+                            self.queue_counter +=1
+                            if (self.queue_counter >= 20):
+                                self.queue_counter = 0
+                                self._proto.addEntry('INFO    ','Queue-Length-IN : {} / Queue-Length-Out : {}'.format(len(self.message_queues[self.incoming_socket]),len(self.message_queues[wrappedSocket])))
+                                
+                            '''    
                             if myActSock == wrappedSocket:
+                                self._proto.addEntry('FLOW    ','Reading OUT')
                                 outgoing_block = b''
                                 while True:
-                                    outgoing_data = wrappedSocket.recv(524800)
+                                    outgoing_data = wrappedSocket.recv(self.video_buffer)
                                     if outgoing_data:
                                         outgoing_block += outgoing_data
-                                    if len(outgoing_block) < 524800:
+                                    if len(outgoing_block) < self.video_buffer:
                                         break
+                                
                                 if len(outgoing_block) == 0:
                                     try:
+                                        self._proto.addEntry('ERROR   ','Testsocket got 0 Bytes from Server')
+                                        self.Sender.socks_write.remove(wrappedSocket)
                                         self.mysocks.remove(wrappedSocket)
                                         wrappedSocket.close()
                                         wrappedSocket = None
@@ -157,18 +197,25 @@ class TestSocket(threading.Thread):
                                         self.incoming_socket.close()
                                     except:
                                         pass    
-                                    break                            
-                                self.incoming_socket.sendall(outgoing_block)
+                                    self.cycle = False
+                                    break
+                                self.Sender.message_queues[self.incoming_socket].put(outgoing_block)
+                                #self.message_queues[self.incoming_socket].append(outgoing_block)
+                                #self.incoming_socket.sendall(outgoing_block)
+                            
                             if myActSock == self.incoming_socket:
+
                                 incoming_block = b''
                                 while True:
-                                    incoming_data = self.incoming_socket.recv(524800)
+                                    incoming_data = self.incoming_socket.recv(4096)
                                     if incoming_data:
                                         incoming_block += incoming_data
                                     if len(incoming_block) < 4096:
                                         break
+                                self._proto.addEntry('INFO    ','Block-Length for Writing: {}'.format(len(incoming_block)))
                                 if len(incoming_block) == 0:
                                     try:
+                                        self._proto.addEntry('ERROR   ','Testsocket got 0 Bytes from Client')
                                         wrappedSocket.sendall(b'TEARDOWN')
                                         self.mysocks.remove(wrappedSocket)
                                         wrappedSocket.close()
@@ -185,16 +232,64 @@ class TestSocket(threading.Thread):
                                     self.cycle = False
                                     break
                                 #self.outgoing_socket.sendall(incoming_block)
-                                wrappedSocket.sendall(incoming_block)
-                        for s in exceptional:
+                                #wrappedSocket.sendall(incoming_block)
+                                #self._proto.addEntry('FLOW    ','Reading IN Length : {}'.format(len(incoming_block)) )
+                                #self.message_queues[wrappedSocket].append(incoming_block)
+                                self.Sender.message_queues[wrappedSocket].put(incoming_block)                                
+                        
+                        '''
+                        for myActSock in writable:
+                            if len(self.message_queues[myActSock]) >= 1:
+                                try:
+                                    self._proto.addEntry('FLOW    ','Writing')
+                                    next_msg = b''
+                                    next_msg = self.message_queues[myActSock][0]
+                                    del self.message_queues[myActSock][0]
+                                    self.queue_counter +=1
+                                    if (self.queue_counter >= 20):
+                                        self.queue_counter = 0
+                                        self._proto.addEntry('INFO    ','Queue-Length-IN : {} / Queue-Length-Out : {}'.format(len(self.message_queues[self.incoming_socket]),len(self.message_queues[wrappedSocket])))
+                                        
+                                    if myActSock == wrappedSocket:
+                                        myRcv = 'T>P' 
+                                        
+                                    else:
+                                        myRcv = 'T>C'
+                                    
+                                    self._proto.addEntry('INFO    ','Send-Message to : {}'.format(myActSock))
+                                    self._proto.addEntry('INFO    ','Block-Length for Writing: {}'.format(len(next_msg)))
+                                    #myActSock.sendall(next_msg)
+                                    while len(next_msg) > 0:
+                                        sent = myActSock.send(next_msg)
+                                        if sent < len(next_msg):
+                                            next_msg = next_msg[sent:]
+                                        else:
+                                            break
+                                    #self._proto.addEntry('INFO    ',next_msg.decode())
+                                    #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(next_msg.decode())))
+                                    self._proto.addEntry('INFO '+myRcv,'sending DATA to {}'.format(myActSock.getpeername()[0]))
+                                    self.logger.debug('sending DATA to {}'.format(myActSock.getpeername()[0]))
+                                
+            
+                                except err as Exception:
+                                    self._proto.addEntry('ERROR   ','While sending to Socket : {}'.format(err))
+                                    continue
+                            else:
+                                pass
+                                #self._proto.addEntry('INFO    ','No Data for writable Socket : {}'.format(myActSock))
+
+
+                        '''
+                        for myActSock in exceptional:
                             wrappedSocket.close()
                             wrappedSocket = None
                             break
                         
             except Exception as err:
                 try:
-                    wrappedSocket.close(
-                    wrappedSocket == None)
+                    self.Sender.stop()
+                    wrappedSocket.close()
+                    wrappedSocket == None
                     pass
                 except:
                     pass
@@ -213,6 +308,7 @@ class TestSocket(threading.Thread):
            
     def stop(self):
         self.cycle = False
+        self.Sender.stop()
         self._proto.addEntry('INFO    ',"Testsocket stopped")
         self.logger.info("Testsocket stopped")
         try:
@@ -262,7 +358,7 @@ class AlexaCamProxy4P3(SmartPlugin):
         self.ClientThreads = []
         self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.path_user_file,self.proxy_credentials,self.proxy_auth_type, self.onyl_allow_own_IP,self.sh)
         self.service.name = 'AlexaCamProxy4P3-Handler'
-        self.TestSocket = TestSocket(self._proto, self.port, self.logger)
+        self.TestSocket = TestSocket(self._proto, self.port, self.logger,self.video_buffer,self.sh)
         self.TestSocket.name = 'AlexaCamProxy4P3-Testsocket'
         
         
@@ -582,6 +678,32 @@ class WebInterface(SmartPluginWebIf):
     
     
     @cherrypy.expose
+    def get_proto_html(self, proto_Name= None):
+        if proto_Name == 'proto_states_check':
+            return json.dumps(self.plugin._proto.log)
+    
+    
+    @cherrypy.expose
+    def clear_proto_html(self, proto_Name= None):
+        if proto_Name == 'btn_clear_proto_states':
+            self.plugin._proto.log = []
+            return None
+    
+    @cherrypy.expose
+    def toggle_TestSocket_html(self, enabled= None):
+        if enabled == 'true':
+            try:
+                self.plugin.TestSocket.run()
+            except:
+                pass
+        else:
+            try:
+                self.plugin.TestSocket.stop()
+            except:
+                pass
+        
+    
+    @cherrypy.expose
     def thread_details_json_html(self, thread_name):
         """
         returns a detailed Informations for a camera-Thread
@@ -670,7 +792,7 @@ class WebInterface(SmartPluginWebIf):
             
         # Collect proxied Cams
         cam_proxied_items = []
-        _link = '<a href="rtsp://{}{}:5000/{}">{}</font></a>'
+        _link = '<a href="rtsp://{}{}:5001/{}">{}</font></a>'
         myCams = self.plugin.cams.Cams
         for actCam in myCams:
             newEntry=dict()
@@ -731,7 +853,11 @@ class WebInterface(SmartPluginWebIf):
         except:
             proxy_auth_type='not found'
             print("Error while building up Proxy-Credentials :",err )
-            
+        
+        try:
+            testsocket_active = self.plugin.TestSocket.alive
+        except:
+            pass
         tmpl = self.tplenv.get_template('index.html')
         return tmpl.render(plugin_shortname=self.plugin.get_shortname(), plugin_version=self.plugin.get_version(),
                            plugin_info=self.plugin.get_info(), p=self.plugin,
@@ -745,7 +871,8 @@ class WebInterface(SmartPluginWebIf):
                            cert_issued_by=cert_issued_by, cert_issued_to=cert_issued_to ,
                            cert_notafter=cert_notafter ,cert_notBefore=cert_notBefore,my_Ciphers=my_Ciphers,
                            video_buffer = self.plugin.video_buffer,
-                           state_log_lines=state_log_file
+                           state_log_lines=state_log_file,
+                           testsocket_active = testsocket_active
                            )
         
                                    

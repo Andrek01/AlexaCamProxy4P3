@@ -108,9 +108,9 @@ input:checked + .slider:before {
 {% endblock headtable %}
 
 {% block buttons %}
-TestSocket &nbsp;&nbsp;
-<label class="switch">
-  <input id="toggleTestSocket" type="checkbox" onChange="ToggleTrigger(this.id)">
+<label style="vertical-align:middle"> TestSocket &nbsp;&nbsp; </label>
+<label class="switch" style="vertical-align:middle">
+  <input id="toggleTestSocket" style="vertical-align:middle" type="checkbox" onChange="ToggleTrigger(this.id)" checked={{ testsocket_active }}>
   <span class="slider round"></span>
 </label>
 {% endblock buttons %}
@@ -240,7 +240,7 @@ TestSocket &nbsp;&nbsp;
 	<tbody>
     <tr>
         <td>
-        	<button id="btn_clear_proto_states" class="btn btn-shng btn-sm" name="btn_clear_proto_states" value="on" onclick="DeleteProto(this.name)"><i class="fas fa-trash-alt"></i>&nbsp;&nbsp;&nbsp;delete Protocol&nbsp;</button>
+        	<button id="btn_clear_proto_states" class="btn btn-shng btn-sm" name="btn_clear_proto_states" value="on" onclick="DeleteProto(this.id)"><i class="fas fa-trash-alt"></i>&nbsp;&nbsp;&nbsp;delete Protocol&nbsp;</button>
         </td>
         <td>
             <div class="custom-control custom-checkbox" style =" vertical-align:middle;align:left">

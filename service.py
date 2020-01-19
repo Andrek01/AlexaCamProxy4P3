@@ -1,5 +1,3 @@
-# https://developer.amazon.com/public/solutions/alexa/alexa-skills-kit/docs/steps-to-create-a-smart-home-skill
-# https://developer.amazon.com/public/solutions/alexa/alexa-skills-kit/docs/smart-home-skill-api-reference
 import os
 import sys
 import socket
@@ -17,8 +15,10 @@ import base64
 import hashlib
 import signal
 from random import random
+import queue
 
 
+from .proxy_handler import Sender
 
 
 
@@ -36,7 +36,6 @@ class ThreadedServer(threading.Thread):
         self.cert_path_key = cert_path_key
         self.ClientThreads = ClientThreads
         self.sock = None
-        self.running = False
         self.FirstRound = True
         self.Cams = Cams
         self.setName('CamProxy4AlexaP3')
@@ -70,7 +69,6 @@ class ThreadedServer(threading.Thread):
     
     def stop(self):
         self.logger.info("ProxyCamAlexaP4: service stopping")
-        self.running= False
         self.logger.info("ProxyCamAlexaP4: set running to false")
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
@@ -82,10 +80,12 @@ class ThreadedServer(threading.Thread):
             self.logger.info("ThreadedServer - closed socket")
         except:
             pass
+        self.alive= False
         
     
         
     def run(self):
+        self.alive = True
         self.logger.info("ProxyCamAlexaP4: service starting")
         if self.FirstRound:
                 if (self.proxyUrl != ''):
@@ -95,22 +95,28 @@ class ThreadedServer(threading.Thread):
                     self.sock.bind(('', self.port))
                     self.sock.listen(5)
                     self.FirstRound=False
-                    self.running= True
+                    self.alive= True
                     #================================
                     # SSL-Settings
                     #================================
+
                     context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
                     # add Certificate to context
                     context.load_cert_chain(self.cert_path, self.cert_path_key)  
                     # add ciphers to context
                     context.set_ciphers(self.cert_ciphers)
+
                 except Exception as err:
                     self.logger.error("could not open Socket on Port {} Error : {}".format(self.port,err))
         aktThread = 0        
-        while self.running:
+        while self.alive:
             client, address = self.sock.accept()
             try:
+
                 conn = context.wrap_socket(client, server_side=True)
+                '''
+                conn = client       # only for Tests
+                '''
                 # Check if only own IP is allowed
                 if (self.onyl_allow_own_IP == True):
                     reqAdress = None
@@ -126,8 +132,8 @@ class ThreadedServer(threading.Thread):
                 client.close()
                 continue
 
-            #client.settimeout(5)
-            #conn.setblocking(0)
+            conn.setblocking(0)
+            conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,1)
  
             try:
                 # Clean up old Threads
@@ -147,7 +153,7 @@ class ThreadedServer(threading.Thread):
                 lastAdded = len(self.ClientThreads )-1
                 NewThreadName ="CamThread-{0:06d}".format(aktThread)
                 self.ClientThreads[lastAdded].name = NewThreadName
-                self.ClientThreads[lastAdded].message_queues[conn] = []
+                self.ClientThreads[lastAdded].message_queues[conn] = queue.Queue()
 
 
                 self.logger.info("ProxyCam4AlexaP3: Added Thread %s" % NewThreadName)
@@ -156,11 +162,13 @@ class ThreadedServer(threading.Thread):
                 self.ClientThreads[lastAdded].start()
 
             except Exception as err:
-                self.logger.info("ProxyCam4AlexaP3: NewThreadError - {}".format(err))
+                self.logger.warning("ProxyCam4AlexaP3: NewThreadError - {}".format(err))
             
             self.logger.debug("ProxyCam4AlexaP3: new Thread added, total Threads:{} ".format(str(len(self.ClientThreads ))))
 
-            
+
+
+
             
 class ProxySocket(threading.Thread):
     def __init__(self,Proto, client, address,logger,cams,videoBuffer=524280, path_User_File = '',proxy_credentials='',proxy_auth_type='NONE',proxy_Url = None,port=0, sh_instance = None):
@@ -197,8 +205,12 @@ class ProxySocket(threading.Thread):
         self.server_last_Cseq = 1
         self.authenticate = ""
         self.server_describe = ""
-        self.org_Describe = None
+        self.Server_Block_Length = []
         self.BUFF_SIZE_CLIENT=4096
+        self.debug_level = 99
+        self.Sender = Sender( self._proto,self.logger,self.sh,self.message_queues)
+        
+        
         
         
         
@@ -206,6 +218,10 @@ class ProxySocket(threading.Thread):
 
         
     def stop(self, txtInfo = ''):
+        self.Sender.stop()
+        
+        self._proto.addEntry('INFO    ',"Server-BlockLength : {}".format(str(self.Server_Block_Length)))
+        
         self.logger.debug("{} got STOP signal ".format(self.name))
         self._proto.addEntry('INFO    ',"{} got STOP signal ".format(self.name))
         for s in self.mysocks:
@@ -217,7 +233,15 @@ class ProxySocket(threading.Thread):
                 s.close()
             except Exception as err:
                 self.logger.debug("Cam Thread cannot close Socket - {}".format(s))
-
+        
+        try:
+            self.mysocks.remove(self.client)
+        except:
+            pass
+        try:
+            self.mysocks.remove(self.server)
+        except:
+            pass
         self.logger.debug("ProxyCam4AlexaP3: Cam Thread stopped - %s" % txtInfo)
         self._proto.addEntry('INFO    ','stopped  Thread {} Reason : {}'.format(self.name, txtInfo))
         self.actCam.proxied_bytes +=self.proxied_bytes
@@ -228,6 +252,7 @@ class ProxySocket(threading.Thread):
         except:
             self.logger.debug("ProxyCam4AlexaP3: Problem during calculating duration-{}".format(err))
         self.alive = False
+        #self.sh.AlexaCamProxy4P3.ClientThreads.remove(self)
         #self.ClientThreads.remove(self)
         
     
@@ -259,6 +284,10 @@ class ProxySocket(threading.Thread):
 
         
     def run(self):
+        self.Sender.client = self.client
+        self.Sender.socks_write.append(self.client)
+        self.Sender.name = self.name + "-Sender"
+        self.Sender.start()
         
         self.logger.info("ProxyCam4AlexaP3: Cam Thread startet")
         self.alive = True
@@ -271,32 +300,79 @@ class ProxySocket(threading.Thread):
         if 'NONE' in self.proxy_auth_type:
             self.Authorization_send = True
             self.Credentials_Checked = True
-            self._proto.addEntry('INFO    ','Allowed Access without Authorization - NONE')
-            self.logger.debug('Allowed Access without Authorization - NONE')
+            if self.debug_level > 5:
+                self._proto.addEntry('INFO    ','Allowed Access without Authorization - NONE')
+                self.logger.debug('Allowed Access without Authorization - NONE')
                     
         while self.alive:
-            readable, writable, exceptional = select.select(self.mysocks, self.mysocks, [],3)
+            #time.sleep(0.0001)       # give other Threads a Chance
+            readable, writable, exceptional = select.select(self.mysocks, [], self.mysocks,3)
             for myActSock in readable:
+                
                 if myActSock == self.server:
                     try:
+                        if self.debug_level > 5:
+                            self._proto.addEntry('FLOW-CTL','Reading on Proxy from Camera')
                         self._handleServerBlock(myActSock)
+                        
                     except:
                         self._proto.addEntry('ERROR   ','Problem while getting Server-DATA')
-                        pass
+                        self.stop("Problem while getting Server-DATA")
 
                 elif myActSock == self.client:
                     try:
+                        if self.debug_level > 5:
+                            self._proto.addEntry('FLOW-CTL','Reading on Proxy from Client')
                         self._handleClientBlock(myActSock)
+
                     except:
                         self._proto.addEntry('ERROR   ','Problem while getting Client-DATA')
-                        pass
+                        self.stop("Problem while getting Client-DATA")
                     
+            '''
             for myActSock in writable:
+                #==============================
+                try:
+                    next_msg = b''
+                    next_msg = self.message_queues[myActSock].get_nowait()
+                except queue.Empty:
+                    pass
+                    # No messages waiting so stop checking for writability.
+                    #self._proto.addEntry('INFO    ', 'output queue for'+ str(myActSock.getpeername())+ 'is empty')
+                    #outputs.remove(s)
+                else:
+                    #self._proto.addEntry('INFO    ', 'sending "%s" to %s' % (next_msg, myActSock.getpeername()))
+                    #s.send(next_msg)
+                    if myActSock == self.server:
+                        myRcv = 'P>S' 
+                    else:
+                        myRcv = 'P>C'
+                    
+                    
+                    if (self.server_url and self.debug_level > 5):
+                        self._proto.addEntry('INFO    ','Queue-Length-CLIENT : {} / Queue-Length-SERVER : {}'.format(self.message_queues[self.client].qsize(),self.message_queues[self.server].qsize()))
+                    if self.debug_level > 5:
+                        self._proto.addEntry('INFO    ',"Block-length : {}".format(len(next_msg)))
+                        self._proto.addEntry('INFO '+myRcv,'sending DATA to {}'.format(myActSock.getpeername()[0]))
+                        self.logger.debug('sending DATA to {}'.format(myActSock.getpeername()[0]))
+                    self._proto.addEntry('INFO    ','Start - Send-Message to : {}'.format(myActSock.getpeername()[0]))
+                    while len(next_msg) > 0:
+                        sent = myActSock.send(next_msg)
+                        if sent < len(next_msg):
+                            next_msg = next_msg[sent:]
+                        else:
+                            break
+                    self._proto.addEntry('INFO    ','Stop - Send-Message to : {}'.format(myActSock.getpeername()[0]))
+                
+
+                #==============================
+
                 if len(self.message_queues[myActSock]) >= 1:
                     try:
                         next_msg = b''
-                        next_msg = self.message_queues[myActSock][0]
-                        del self.message_queues[myActSock][0]
+                        #next_msg = self.message_queues[myActSock][0]
+                        #del self.message_queues[myActSock][0]
+                        next_msg = message_queues[myActSock].get_nowait()
                         if myActSock == self.server:
                             myRcv = 'P>S' 
                             
@@ -304,8 +380,19 @@ class ProxySocket(threading.Thread):
                             myRcv = 'P>C'
                         
                         self._proto.addEntry('INFO    ','Send-Message to : {}'.format(myActSock))
-                        myActSock.send(next_msg)
-                        self._proto.addEntry('INFO    ',next_msg.decode())
+                        if (self.server_url):
+                            self._proto.addEntry('INFO    ','Queue-Length-CLIENT : {} / Queue-Length-SERVER : {}'.format(len(self.message_queues[self.client]),len(self.message_queues[self.server])))
+                        #myActSock.sendall(next_msg)
+                        while len(next_msg) > 0:
+                            sent = myActSock.send(next_msg)
+                            if sent < len(next_msg):
+                                next_msg = next_msg[sent:]
+                            else:
+                                break
+                        try:
+                            self._proto.addEntry('INFO    ',next_msg.decode())
+                        except:
+                            pass
                         self._proto.addEntry('INFO    ',"Block-length : {}".format(len(next_msg.decode())))
                         self._proto.addEntry('INFO '+myRcv,'sending DATA to {}'.format(myActSock.getpeername()[0]))
                         self.logger.debug('sending DATA to {}'.format(myActSock.getpeername()[0]))
@@ -313,10 +400,17 @@ class ProxySocket(threading.Thread):
 
                     except err as Exception:
                         self._proto.addEntry('ERROR   ','While sending to Socket : {}'.format(err))
-                        continue
+                        self.stop('While sending to Socket : {}'.format(err))
+                    
                 else:
                     pass
                     #self._proto.addEntry('INFO    ','No Data for writable Socket : {}'.format(myActSock))
+            '''
+            for myActSock in exceptional:
+                    self._proto.addEntry('ERROR   ','Exception on Socket : {}'.format(myActSock))
+                    self.stop("Exception from Socket : {}".format(myActSock))
+                
+                
 
         self.Stop("not Alive any longer")
     
@@ -324,32 +418,45 @@ class ProxySocket(threading.Thread):
         try:
             if self.server_url:
                 serverblock = b''
+                if self.debug_level > 5:
+                    self._proto.addEntry('INFO    ','Start - Read-Message from : {}'.format(mySocket.getpeername()[0]))
                 while True:
                     serverdata = mySocket.recv(self.BUFF_SIZE_SERVER)
                     if serverdata:
                         serverblock += serverdata
                     if len(serverdata) < self.BUFF_SIZE_SERVER:
                         break
-            
+                if self.debug_level > 5:
+                    self._proto.addEntry('INFO    ','Stop - Read-Message from : {}'.format(mySocket.getpeername()[0]))
                 
             if serverblock:
                 try:
-                    if "\r\n" in serverblock.decode():
-                        self._proto.addEntry('INFO S>P',serverblock.decode())
+                    if self.debug_level > 5:
+                        self.Server_Block_Length.append(len(serverblock))
+                        self._proto.addEntry('INFO (P)','Block-Length for Read-Server: {}'.format(len(serverblock)))
+                    #if len(serverblock) > 16384:
+                except:
+                    pass
+                try:
+                    if "\r\n" in serverblock.decode() and self.debug_level > 5:
+                            self._proto.addEntry('INFO S>P',serverblock.decode())
                         #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(serverblock.decode())))
                 except:
+                    self.Sender.message_queues[self.client].put(serverblock)
+                    return
                     pass
                 
                 try:
                     self.proxied_bytes += len(serverblock)
-                    self.logger.error("added proxied bytes")
+                    #self.logger.error("added proxied bytes")
                 except Exception as err:
                     self.logger.error("Server-Block inconsistent")
                     self._proto.addEntry('INFO    ',"Server-Block inconsistent during adding proxied bytes")
                 
                 try:
                     if ( not self.server_auth and "WWW-Authenticate" in serverblock.decode()):
-                        self._proto.addEntry('INFO S>P',"Got WWW-Authenticate from Camera\r\n"+ serverblock.decode())
+                        if self.debug_level > 5:
+                            self._proto.addEntry('INFO S>P',"Got WWW-Authenticate from Camera\r\n"+ serverblock.decode())
                         # inject Authorization in self.server_describe
                         if (self.server_describe != ""):
                             myResponse = self.server_add_authorization(serverblock.decode(),self.server_describe.decode())
@@ -357,8 +464,11 @@ class ProxySocket(threading.Thread):
                             myResponse = self._inject_sequence_no(myResponse,self.server_last_Cseq)
                             self.server_last_Cseq += 1
                             #self.server.sendall(myResponse)
-                            self.message_queues[self.server].append(myResponse)
-                            self._proto.addEntry('INFO P>S',"Send Authorization to Camera\r\n"+ myResponse.decode())
+                            #self.message_queues[self.server].append(myResponse)
+                            #self.message_queues[self.server].put(myResponse)
+                            self.Sender.message_queues[self.server].put(myResponse)
+                            if self.debug_level > 5:
+                                self._proto.addEntry('INFO P>S',"Send Authorization to Camera\r\n"+ myResponse.decode())
                             self.server_auth = True
                             return
                     
@@ -370,32 +480,38 @@ class ProxySocket(threading.Thread):
                 
                 # send data from Server to Client
                 try:
-                    serverblock = self._inject_sequence_no(serverblock, self.client_last_Cseq)
+                    if "\r\n" in serverblock.decode():
+                        serverblock = self._inject_sequence_no(serverblock, self.client_last_Cseq)
                     
                 except:
                     #self._proto.addEntry('ERROR   ',"ERROR while injecting last client sequence")
                     pass
                 
                 try:
-                    if "\r\n" in serverblock.decode():
+                    if "\r\n" in serverblock.decode() and self.debug_level > 5:
                         self._proto.addEntry('INFO P>C',serverblock.decode())
                         #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(serverblock.decode())))
                 except:
                     pass
 
-                self.message_queues[self.client].append(serverblock)
-
+                #self.message_queues[self.client].append(serverblock)
+                #self.message_queues[self.client].put(serverblock)
+                self.Sender.message_queues[self.client].put(serverblock)
+                #myErg = self.client.sendall(serverblock)
+                #if myErg != None:
+            else:
+                self.stop("Server Hang Up")
                 
     
         except Exception as err:
             self.logger.info("ProxyCam4AlexaP3: Server disconnected right now not connected - {}".format(err))
-            pass
+            self.stop('Server-hang up')
 
     def _handleClientBlock(self, mySocket):
         try:
             self.peer = mySocket.getpeername()[0]
         except Exception as err:
-            self.logger.info("Problem by by getting Peer-Name")
+            self.logger.warning("Problem by by getting Peer-Name")
 
         clientblock = b''
         while True:
@@ -408,47 +524,50 @@ class ProxySocket(threading.Thread):
         
         
         if clientblock:
-            self.logger.debug("ProxyCam4AlexaP3: Client-Message-{}".format(str(clientblock.decode())))
-            self._proto.addEntry('INFO C>P','Client-Message-{}'.format(str(clientblock.decode())))
-            self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
-            
+            if self.debug_level > 5:
+                self._proto.addEntry('INFO (P)','Block-Length for Read-Client in: {}'.format(len(clientblock)))
             try:
-                self.client_last_Cseq = self._get_sequence_no(clientblock)
+                if "\r\n" in clientblock.decode():
+                    if self.debug_level > 5:
+                        self.logger.debug("ProxyCam4AlexaP3: Client-Message-{}".format(str(clientblock.decode())))
+                        self._proto.addEntry('INFO C>P','Client-Message-{}'.format(str(clientblock.decode())))
+                        self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
+                
+                    try:
+                        self.client_last_Cseq = self._get_sequence_no(clientblock)
+                    except:
+                        pass
             except:
-                pass
-                
+                # Only Stream-Infos add to qeue and return
+                #self.message_queues[self.server].put(clientblock)
+                self.Sender.message_queues[self.server].put(clientblock)
+                return
             
-                        
-            
-            
-            # Keep Describe to Server in mind
-            if ('DESCRIBE' in clientblock.decode() and self.server_describe == "" and not 'OPTIONS' in clientblock.decode()):
-                self.org_Describe = clientblock
-                self.server_describe = self._inject_sequence_no(clientblock, self.server_last_Cseq)
-                self.server_describe = self.InjectRealUrl(self.server_describe)
-                if self.server_describe == False:
-                    self.stop("Error while InjetRealURL")
-                self._proto.addEntry('INFO    ',"reminded parsed DESCRIBE from Client\r\n"+self.server_describe.decode())
-                
                 
             if (self.Authorization_send == False):    
                 if 'DIGEST' in self.proxy_auth_type:
                     AuthResponse = self.CreateDigestAuthResponse().encode()
                     AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
-                    self.message_queues[self.client].append(AuthResponse)
+                    #self.message_queues[self.client].put(AuthResponse)
+                    self.Sender.message_queues[self.client].put(AuthResponse)
+                    #self.message_queues[self.client].append(AuthResponse)
                     #self.client.sendall(AuthResponse)
                     self.Authorization_send = True
-                    self.logger.debug(self.CreateDigestAuthResponse())
-                    self._proto.addEntry('INFO P>C',AuthResponse.decode())
+                    if self.debug_level > 5:
+                        self.logger.debug(self.CreateDigestAuthResponse())
+                        self._proto.addEntry('INFO P>C',AuthResponse.decode())
                     return
                 elif 'BASIC' in self.proxy_auth_type:
                     AuthResponse =self.CreateBasicAuthResponse().encode()
                     AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
-                    self.message_queues[self.client].append(AuthResponse)
+                    self.Sender.message_queues[self.client].put(AuthResponse)
+                    #self.message_queues[self.client].put(AuthResponse)
+                    #self.message_queues[self.client].append(AuthResponse)
                     #self.client.sendall(AuthResponse)
                     self.Authorization_send = True
-                    self.logger.debug(self.CreateBasicAuthResponse())
-                    self._proto.addEntry('INFO P>C',AuthResponse.decode())
+                    if self.debug_level > 5:
+                        self.logger.debug(self.CreateBasicAuthResponse())
+                        self._proto.addEntry('INFO P>C',AuthResponse.decode())
                     return
 
                 
@@ -460,24 +579,27 @@ class ProxySocket(threading.Thread):
                     ForbiddenResponse =self.CreateForbiddenResponse().encode()
                     ForbiddenResponse = self._inject_sequence_no(ForbiddenResponse,self.client_last_Cseq)
                     #self.client.sendall(ForbiddenResponse)
-                    self.message_queues[self.client].append(ForbiddenResponse)
-                    self.logger.debug(self.CreateForbiddenResponse())
-                    self._proto.addEntry('INFO P>C',ForbiddenResponse.decode())
+                    #self.message_queues[self.client].append(ForbiddenResponse)
+                    #self.message_queues[self.client].put(ForbiddenResponse)
+                    self.Sender.message_queues[self.client].put(ForbiddenResponse)
+                    if self.debug_level > 5:
+                        self.logger.debug(self.CreateForbiddenResponse())
+                        self._proto.addEntry('INFO P>C',ForbiddenResponse.decode())
                     self.stop('Authorization failed 403')
                     self._proto.addEntry('INFO P>C','Authorization failed 403')
                     return
                 else:
-                    self._proto.addEntry('INFO P>C','Client - Authorization OK')
+                    if self.debug_level > 5:
+                        self._proto.addEntry('INFO P>C','Client - Authorization OK')
+            
+            # Keep Describe to Server in mind
+            if ('DESCRIBE' in clientblock.decode() and self.server_describe == "" and not 'OPTIONS' in clientblock.decode()):
+                self.server_describe = clientblock
+                if self.debug_level > 5:
+                    self._proto.addEntry('INFO    ',"reminded DESCRIBE from Client\r\n"+self.server_describe.decode())            
             
             
             
-            
-            if ('DESCRIBE' in clientblock.decode() and self.server_describe != ""):
-                injectedUrl = self.server_describe
-                self.logger.debug("Client-Msg-injected : {}".format(str(injectedUrl.decode())))
-                self._proto.addEntry('INFO    ',"Client-Msg-injected\r\n{}".format(str(injectedUrl.decode())))
-                
-                clientblock = injectedUrl
                 
 
                 
@@ -487,7 +609,7 @@ class ProxySocket(threading.Thread):
             # Send data to Server if connected
                                         
             try:
-                if self.Credentials_Checked:
+                if self.Credentials_Checked and "\r\n" in clientblock.decode():
                     if ('Authorization:' in clientblock.decode()):
                         myClientBlock = self.DeleteAuthoriziation(clientblock.decode())
                         clientblock = myClientBlock.encode()
@@ -500,7 +622,8 @@ class ProxySocket(threading.Thread):
                         if (self.authenticate != ""):
                             clientblock = self._inject_line(clientblock, self.authenticate)
                     except err as Exception:
-                        self._proto.addEntry('ERROR   ',"While inject_squence in Clientblock/add authenticate {}".format(err))
+                        if self.debug_level > 5:
+                            self._proto.addEntry('ERROR   ',"While inject_squence in Clientblock/add authenticate {}".format(err))
                         pass
                     
                     if not self.server_url and self.Credentials_Checked == True:
@@ -515,13 +638,22 @@ class ProxySocket(threading.Thread):
                                 self.stop('Found no Cam !!')
                             try:
                                 try:
+                                    self._proto.addEntry('INFO    ',"Start setting up Server-Connection")
                                     self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                                     self.server.connect((serverUrl, int(serverport)))
+                                    self.server.setblocking(0)
+                                    self.server.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,1)
                                     self.mysocks.append(self.server)
-                                    self.message_queues[self.server] = []
+                                    self.Sender.socks_write.append(self.server)
+                                    self.Sender.server = self.server
+                                    self.Sender.message_queues[self.server] = queue.Queue()
+                                    self._proto.addEntry('INFO    ',"Complete setting up Server-Connection")
+                                    #self.message_queues[self.server] = queue.Queue()
                                     self.server_url = True
-                                    self.logger.debug("ProxyCam4AlexaP3: connected to Camera")
-                                    self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: connected to Camera")
+                                    if self.debug_level > 5:
+                                        self.logger.debug("ProxyCam4AlexaP3: connected to Camera")
+                                        self._proto.addEntry('INFO    ',"ProxyCam4AlexaP3: connected to Camera")
+
                                 except:
                                     self.logger.warning("could not connected to Camera : {}".format(serverUrl))
                                     self._proto.addEntry('ERROR   ',"could not connected to Camera : {}".format(serverUrl))
@@ -535,23 +667,41 @@ class ProxySocket(threading.Thread):
                             self.stop('Exception see log-file')
                     
                     
-                    #self.server.sendall(clientblock)
-                    self.message_queues[self.server].append(clientblock)
+                    if ('DESCRIBE' in clientblock.decode() and self.server_describe != "" and self.server_url):
+                        # Now inject URL
+                        self.server_describe = self._inject_sequence_no(clientblock, self.server_last_Cseq)
+                        self.server_describe = self.InjectRealUrl(self.server_describe)
+                        if self.server_describe == False:
+                            self.stop("Error while InjetRealURL")
+                        if self.debug_level > 5:
+                            self._proto.addEntry('INFO    ',"parsed DESCRIBE from Client\r\n"+self.server_describe.decode())
+                        injectedUrl = self.server_describe
+                        if self.debug_level > 5:
+                            self.logger.debug("Client-Msg-injected : {}".format(str(injectedUrl.decode())))
+                            self._proto.addEntry('INFO    ',"Client-Msg-injected\r\n{}".format(str(injectedUrl.decode())))
+                        clientblock = injectedUrl
+                    
+                    self.Sender.message_queues[self.server].put(clientblock)
+                    #self.message_queues[self.server].put(clientblock)
+                    #myErg = self.server.sendall(clientblock)
+                    #if myErg != None:
+                    
                     if "\r\n" in clientblock.decode():
-                        self._proto.addEntry('INFO P>S',clientblock.decode())
+                        if self.debug_level > 5:
+                            self._proto.addEntry('INFO P>S',clientblock.decode())
                         #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
             except err as Exception:
                 self.logger.debug("Error while server-send {}".format(err))
 
                 
             if 'TEARDOWN' in clientblock.decode():
+                #pass
                 self.stop('TEARDOWN')
-            if 'PAUSE' in clientblock.decode():
-                self.stop('PAUSE')
+
 
         else:
-            pass
-            #self.stop('Client-hang up')
+            #pass
+            self.stop('Client-hang up')
 
     
 
@@ -618,7 +768,8 @@ class ProxySocket(threading.Thread):
         try:
             myHost = socket.gethostbyname(webserver)
             if (myHost != webserver):
-                self._proto.addEntry('INFO    ',"resolved IP {} for Hostname : {}".format(myHost,webserver))
+                if self.debug_level > 5:
+                    self._proto.addEntry('INFO    ',"resolved IP {} for Hostname : {}".format(myHost,webserver))
                 webserver = myHost
         except:
             self._proto.addEntry('ERROR   ',"Could not resolve IP-Adress for {}".format(webserver))
@@ -704,8 +855,8 @@ class ProxySocket(threading.Thread):
         PropValues['method']=""
         PropValues['algorithm']=""
         PropValues['entity_body']=""
-        
-        self._proto.addEntry('INFO    ',"CheckAuthorization\r\n" + Request)
+        if self.debug_level > 5:
+            self._proto.addEntry('INFO    ',"CheckAuthorization\r\n" + Request)
         
         
         if Request.find("Authorization") < 0:
@@ -719,8 +870,8 @@ class ProxySocket(threading.Thread):
             if line.find("Authorization") >= 0:
                 break
             
-                
-        self._proto.addEntry('INFO    ',"found Method : {}".format(PropValues['method']))                
+        if self.debug_level > 5:        
+            self._proto.addEntry('INFO    ',"found Method : {}".format(PropValues['method']))                
         # no Authorization found
         if len(line) <= 5:
             return False
