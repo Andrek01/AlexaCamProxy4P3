@@ -110,7 +110,7 @@ input:checked + .slider:before {
 {% block buttons %}
 <label style="vertical-align:middle"> TestSocket &nbsp;&nbsp; </label>
 <label class="switch" style="vertical-align:middle">
-  <input id="toggleTestSocket" style="vertical-align:middle" type="checkbox" onChange="ToggleTrigger(this.id)" checked={{ testsocket_active }}>
+  <input id="toggleTestSocket" style="vertical-align:middle" type="checkbox" onChange="ToggleTrigger(this.id)" {{ testsocket_active }}>
   <span class="slider round"></span>
 </label>
 {% endblock buttons %}

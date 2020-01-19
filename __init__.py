@@ -890,9 +890,10 @@ class WebInterface(SmartPluginWebIf):
             print("Error while building up Proxy-Credentials :",err )
         
         try:
-            testsocket_active = self.plugin.TestSocket.alive
+            if self.plugin.TestSocket.alive:
+                testsocket_active = "checked"
         except:
-            pass
+            testsocket_active = ""
         tmpl = self.tplenv.get_template('index.html')
         return tmpl.render(plugin_shortname=self.plugin.get_shortname(), plugin_version=self.plugin.get_version(),
                            plugin_info=self.plugin.get_info(), p=self.plugin,
