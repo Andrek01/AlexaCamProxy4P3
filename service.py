@@ -140,7 +140,7 @@ class ThreadedServer(threading.Thread):
                 for t in self.ClientThreads:
                     if t.alive == False:
                         try:
-                            t.actCam.proxied_bytes +=t.proxied_bytes
+                            #t.actCam.proxied_bytes +=t.proxied_bytes
                             self.ClientThreads.remove(t)
                         except:
                             self._proto.addEntry('ERROR   ',"While storing proxied Bytes to : {}".format(t.name))
@@ -208,6 +208,7 @@ class ProxySocket(threading.Thread):
         self.Server_Block_Length = []
         self.BUFF_SIZE_CLIENT=4096
         self.debug_level = 99
+        self.handshake = 0
         self.Sender = Sender( self._proto,self.logger,self.sh,self.message_queues)
         
         
@@ -245,6 +246,7 @@ class ProxySocket(threading.Thread):
         self.logger.debug("ProxyCam4AlexaP3: Cam Thread stopped - %s" % txtInfo)
         self._proto.addEntry('INFO    ','stopped  Thread {} Reason : {}'.format(self.name, txtInfo))
         self.actCam.proxied_bytes +=self.proxied_bytes
+        #self.sh.AlexaCamProxy4P3.cams.Cams[self.actCam.proxied_Url].proxied_bytes += self.proxied_bytes
         try:
             self.actCam.last_Session_End = datetime.now()
             duration_sec = mktime(self.actCam.last_Session_End.timetuple()) - mktime(self.actCam.last_Session_Start.timetuple())
@@ -437,21 +439,31 @@ class ProxySocket(threading.Thread):
                     #if len(serverblock) > 16384:
                 except:
                     pass
-                try:
-                    if "\r\n" in serverblock.decode() and self.debug_level > 5:
-                            self._proto.addEntry('INFO S>P',serverblock.decode())
-                        #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(serverblock.decode())))
-                except:
-                    self.Sender.message_queues[self.client].put(serverblock)
-                    return
-                    pass
                 
                 try:
                     self.proxied_bytes += len(serverblock)
+                    #self.sh.AlexaCamProxy4P3.cams.Cams[self.actCam.proxied_Url].proxied_bytes += len(serverblock)
                     #self.logger.error("added proxied bytes")
                 except Exception as err:
                     self.logger.error("Server-Block inconsistent")
                     self._proto.addEntry('INFO    ',"Server-Block inconsistent during adding proxied bytes")
+                    
+                try:
+                    if "\r\n" in serverblock.decode():
+                        if self.debug_level > 5:
+                            self._proto.addEntry('INFO S>P',serverblock.decode())
+                        if 'Content-Type: application/sdp' in serverblock.decode() and 'Content-length' in serverblock.decode():
+                            self.handshake = 1      # got SDP
+                        if 'SETUP' in serverblock.decode() and 'Transport' in serverblock.decode():
+                            self.handshake = 2      # got SETUP
+                        if 'PLAY' in serverblock.decode() and 'Session' in serverblock.decode():
+                            self.handshake = 3      # got PLAY                            
+                except:
+                    self.Sender.message_queues[self.client].put(serverblock)
+                    return
+
+                
+
                 
                 try:
                     if ( not self.server_auth and "WWW-Authenticate" in serverblock.decode()):
@@ -466,7 +478,8 @@ class ProxySocket(threading.Thread):
                             #self.server.sendall(myResponse)
                             #self.message_queues[self.server].append(myResponse)
                             #self.message_queues[self.server].put(myResponse)
-                            self.Sender.message_queues[self.server].put(myResponse)
+                            #self.Sender.message_queues[self.server].put(myResponse)
+                            self.send_immendiate(self.server, myResponse)
                             if self.debug_level > 5:
                                 self._proto.addEntry('INFO P>S',"Send Authorization to Camera\r\n"+ myResponse.decode())
                             self.server_auth = True
@@ -481,8 +494,9 @@ class ProxySocket(threading.Thread):
                 # send data from Server to Client
                 try:
                     if "\r\n" in serverblock.decode():
+                        if ('Content-length' in serverblock.decode()):
+                            self._proto.addEntry('INFO (X)','Before-'+serverblock.decode())
                         serverblock = self._inject_sequence_no(serverblock, self.client_last_Cseq)
-                    
                 except:
                     #self._proto.addEntry('ERROR   ',"ERROR while injecting last client sequence")
                     pass
@@ -494,9 +508,11 @@ class ProxySocket(threading.Thread):
                 except:
                     pass
 
+                    
                 #self.message_queues[self.client].append(serverblock)
                 #self.message_queues[self.client].put(serverblock)
-                self.Sender.message_queues[self.client].put(serverblock)
+                #self.Sender.message_queues[self.client].put(serverblock)
+                self.send_immendiate(self.client, serverblock)
                 #myErg = self.client.sendall(serverblock)
                 #if myErg != None:
             else:
@@ -549,9 +565,10 @@ class ProxySocket(threading.Thread):
                     AuthResponse = self.CreateDigestAuthResponse().encode()
                     AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
                     #self.message_queues[self.client].put(AuthResponse)
-                    self.Sender.message_queues[self.client].put(AuthResponse)
+                    #self.Sender.message_queues[self.client].put(AuthResponse)
                     #self.message_queues[self.client].append(AuthResponse)
                     #self.client.sendall(AuthResponse)
+                    self.send_immendiate(self.client, AuthResponse)
                     self.Authorization_send = True
                     if self.debug_level > 5:
                         self.logger.debug(self.CreateDigestAuthResponse())
@@ -560,7 +577,8 @@ class ProxySocket(threading.Thread):
                 elif 'BASIC' in self.proxy_auth_type:
                     AuthResponse =self.CreateBasicAuthResponse().encode()
                     AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
-                    self.Sender.message_queues[self.client].put(AuthResponse)
+                    self.send_immendiate(self.client, AuthResponse)
+                    #self.Sender.message_queues[self.client].put(AuthResponse)
                     #self.message_queues[self.client].put(AuthResponse)
                     #self.message_queues[self.client].append(AuthResponse)
                     #self.client.sendall(AuthResponse)
@@ -581,7 +599,8 @@ class ProxySocket(threading.Thread):
                     #self.client.sendall(ForbiddenResponse)
                     #self.message_queues[self.client].append(ForbiddenResponse)
                     #self.message_queues[self.client].put(ForbiddenResponse)
-                    self.Sender.message_queues[self.client].put(ForbiddenResponse)
+                    #self.Sender.message_queues[self.client].put(ForbiddenResponse)
+                    self.send_immendiate(self.client, ForbiddenResponse)
                     if self.debug_level > 5:
                         self.logger.debug(self.CreateForbiddenResponse())
                         self._proto.addEntry('INFO P>C',ForbiddenResponse.decode())
@@ -681,7 +700,8 @@ class ProxySocket(threading.Thread):
                             self._proto.addEntry('INFO    ',"Client-Msg-injected\r\n{}".format(str(injectedUrl.decode())))
                         clientblock = injectedUrl
                     
-                    self.Sender.message_queues[self.server].put(clientblock)
+                    #self.Sender.message_queues[self.server].put(clientblock)
+                    self.send_immendiate(self.server, clientblock)
                     #self.message_queues[self.server].put(clientblock)
                     #myErg = self.server.sendall(clientblock)
                     #if myErg != None:
@@ -700,10 +720,27 @@ class ProxySocket(threading.Thread):
 
 
         else:
-            #pass
             self.stop('Client-hang up')
+            if self.handshake == 1:
+                self._proto.addEntry('ERROR   ','Client hang up after SDP-Information - perhaps you have specified a wrong Video/Audio-Setting to your Alexa-Device')
 
     
+    def send_immendiate(self,sock2send,next_msg):
+        time1 = datetime.now()
+        blocklength = len(next_msg)
+        if self.debug_level > 10:
+            self._proto.addEntry('INFO (I)',self.name + ' - ' + str(next_msg))
+        while len(next_msg) > 0:
+            sent = sock2send.send(next_msg)
+            if sent < len(next_msg):
+                next_msg = next_msg[sent:]
+            else:
+                break
+        if self.debug_level > 5:
+            time2 = datetime.now()
+            sendtime = time2-time1
+            self._proto.addEntry('INFO (I)',self.name+' - send-duration {} - Send-Message to : {} - block-length : {}'.format(sendtime, sock2send.getpeername()[0],blocklength))
+
 
     def getUrl(self, request):
         port = ''
@@ -1110,7 +1147,7 @@ class ProxySocket(threading.Thread):
         myNewArray = []
         for line in block_to_decode.decode().split("\r\n"):
             if ("CSEQ" in line.upper()):
-                line ="CSeq: " + str(act_sequence_no)+ " "
+                line ="CSeq: " + str(act_sequence_no) + " "
             myNewArray.append(line)
         
         myNewArray = myNewArray[:-1]

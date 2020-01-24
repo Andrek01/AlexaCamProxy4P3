@@ -755,12 +755,12 @@ class WebInterface(SmartPluginWebIf):
                         actDateTime = datetime.now()
                         duration_sec = mktime(actDateTime.timetuple()) - mktime(t.last_Session_Start.timetuple())
                         Session_duration = str(timedelta(seconds=duration_sec))
-                        
                         info_data = {
                             'Name' : t.name,
                             'Video-Buffer-Size': t.BUFF_SIZE_SERVER,
                             'proxied_bytes' : t.proxied_bytes,
                             'last_Session_Start' : t.last_Session_Start.strftime("%Y-%m-%d %H:%M:%S"),
+                            #'last_Session_End' : t.last_Session_End.strftime("%Y-%m-%d %H:%M:%S"),
                             'Session_duration' : Session_duration,
                             'server_url' : t.server_url,
                             'peer' : t.peer,

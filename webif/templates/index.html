@@ -99,7 +99,7 @@ input:checked + .slider:before {
 			<td align="right" class="py-1">{{ proxyCredentials }}</td>
 		</tr>
 		<tr>
-			<td class="py-1"><strong>Proxy-Authorisierung</strong></td>
+			<td class="py-1"><strong>Proxy-Authorization</strong></td>
 			<td align="right" class="py-1">{{ proxy_auth_type }}</td>
 		</tr>
 
@@ -154,7 +154,7 @@ input:checked + .slider:before {
 				</td>
 			</tr>
             <tr>
-				<td colspan="2" style="width: 10%; vertical-align:middle" align="left"><strong>Video-Buffer-Size : :</strong></td>
+				<td colspan="2" style="width: 10%; vertical-align:middle" align="left"><strong>Video-Buffer-Size :</strong></td>
 				<td style="width: 15%" valign = "middle" align="left">
 			          <input type="input" style="margin-bottom: 1px; margin-left: 5px; width: 100%;font-size: 12px" class="form-control" name="txtUser" id="txtUser" placeholder="{{ _('bytes') }}" value={{ video_buffer }}>			
 				</td>
@@ -304,8 +304,8 @@ $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
                                 <a class="float-sm-right" href="#" onclick="reloadThreads();" title="{{ _('Neu Laden', 'button') }}"><span id="refresh-element" class="fas fa-sync"></span></a>
                                 <strong>{{ _('Threads existing ...') }}</strong>
                             </div>
-                            <div class="card-body p-1">
-                                <div class="card-text" style="">
+                            <div class="card-body p-1" style="overflow-y: scroll">
+                                <div class="card-text">
                                     <div id="cardOverlay" class="cardOverlay">
                                         <div style="position: relative; top: 45%; left:45%;">
                                             <span id="reload-element" class="fas fa-sync fa-4x"/>
@@ -325,24 +325,19 @@ $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
 				<tr>
 
 				<strong align="left">{{ _('Thread-Details') }}</strong>
-
-
-
-
-
-                                <a class="float-sm-right" align="right" href="#" onclick="SelectListItem(actThreadName);" title="{{ _('Neu Laden', 'button') }}"><span id="refresh-element_details" class="fas fa-sync"></span></a>
+                 <a class="float-sm-right" align="right" href="#" onclick="SelectListItem(actThreadName);" title="{{ _('Neu Laden', 'button') }}"><span id="refresh-element_details" class="fas fa-sync"></span></a>
 
                             </tr>
                             </table>
 			    </div>
-                            <div class="card-body p-1" style="position: relative;">
+                            <div class="card-body p-1" style="position: relative; overflow-y: scroll">
                                 <div class="card-text" style="">
                                     <div id="cardOverlay_Details" class="cardOverlay_Details">
                                         <div style="position: relative; top: 45%; left:45%;">
                                             <span id="reload-element_details" class="fas fa-sync fa-4x"/>
                                         </div>
                                     </div>
-                                    <div id="thread_details" class="data-container refresh-data pre-scrollable" style="overflow-x: auto;">
+                                    <div id="thread_details" class="data-container refresh-data pre-scrollable" style="overflow-x: auto; overflow-y: scroll">
                                     {{ _('Details.....') }}
                                     </div>
                                 </div>

@@ -48,7 +48,7 @@ class Sender(threading.Thread):
                         try:
                             self._proto.addEntry('INFO    ', 'sending "%s" to %s' % (next_msg, myActSock.getpeername()))
                             self._proto.addEntry('INFO (S)','Queue-Length-CLIENT : {} / Queue-Length-SERVER : {}'.format(self.message_queues[self.client].qsize(),self.message_queues[self.server].qsize()))
-                        except:
+                        except Exception as err:
                             pass
                     if self.debug_level > 5:
                         try:
@@ -59,23 +59,32 @@ class Sender(threading.Thread):
                             self._proto.addEntry('INFO (S)',self.name+"Block-length : {}".format(len(next_msg)))
                             self._proto.addEntry('INFO '+myRcv,self.name+'sending DATA to {}'.format(myActSock.getpeername()[0]))
                             self.logger.debug('sending DATA to {}'.format(myActSock.getpeername()[0]))
-                        except:
+                        except Exception as err:
                             pass
                     #self._proto.addEntry('INFO (S)',self.name+'Start - Send-Message to : {}'.format(myActSock.getpeername()[0]))
-                    time1 = datetime.now()
-                    blocklength = len(next_msg)
-                    while len(next_msg) > 0:
-                        sent = myActSock.send(next_msg)
-                        if sent < len(next_msg):
-                            next_msg = next_msg[sent:]
-                        else:
-                            break
-                    if self.debug_level > 5:
-                        time2 = datetime.now()
-                        sendtime = time2-time1
-                        self._proto.addEntry('INFO (S)',self.name+' - send-duration {} - Send-Message to : {} - block-length : {}'.format(sendtime, myActSock.getpeername()[0],blocklength))
-                        #self._proto.addEntry('INFO (S)',self.name+'Stop - Send-Message to : {}'.format(myActSock.getpeername()[0]))
-                
+                    try:
+                        time1 = datetime.now()
+                        blocklength = len(next_msg)
+                        block_to_send = next_msg
+                        while len(next_msg) > 0:
+                            sent = myActSock.send(next_msg)
+                            if sent < len(next_msg):
+                                next_msg = next_msg[sent:]
+                            else:
+                                break
+                        if self.debug_level > 5:
+                            time2 = datetime.now()
+                            sendtime = time2-time1
+                            self._proto.addEntry('INFO (S)',self.name+' - send-duration {} - Send-Message to : {} - block-length : {}'.format(sendtime, myActSock.getpeername()[0],blocklength))
+                            #self._proto.addEntry('INFO (S)',self.name+'Stop - Send-Message to : {}'.format(myActSock.getpeername()[0]))
+                    except Exception as err:
+                        self._proto.addEntry('ERROR(S)',self.name+' - Error while sending {} '.format(err))
+                        self._proto.addEntry('ERROR(S)',self.name+' - putting frame in queue ')
+                        self.message_queues[myActSock].put(block_to_send)
+            
+            for myActSock in excpetional:
+                self._proto.addEntry('INFO (S)',self.name+' - exception on Socket {} '.format(myActSock.getpeername()[0]))
+                continue                                     
             
         
     def stop(self):

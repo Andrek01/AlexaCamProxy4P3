@@ -1,4 +1,3 @@
-window.addEventListener("resize", resizeItemTree, false);
 
 //*************************************************************
 // check Auto-Updates for protocols
@@ -107,11 +106,13 @@ function actProto(response,proto_Name)
 }
 
 function resizeItemTree() {
-    var browserHeight = $( window ).height();
+    var browserHeight = window.innerHeight;
     offsetTop = $('#threads').offset().top;
     offsetTopDetail = $('#thread_details').offset().top;
     //$('#threads').css("maxHeight", ((-1)*(offsetTop) - 35 + browserHeight)+ 'px');
+    $('#threads').css("cssText","overflow: auto scroll; max-height: 1000px;")
     //$('#thread_details').css("maxHeight", ((-1)*(offsetTopDetail) - 35 + browserHeight)+ 'px');
+    $('#thread_details').css("cssText","overflow: auto scroll; max-height: 1000px;")
 }
 resizeItemTree();
 
@@ -186,4 +187,4 @@ function SelectListItem(threadname)
     		});
 
 
-}
+}window.addEventListener("resize", resizeItemTree, false);
