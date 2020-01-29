@@ -128,6 +128,7 @@ class ThreadedServer(threading.Thread):
                         continue
             except Exception as err:
                 self.logger.error("ProxyCam4AlexaP3: SSL-Error - {} peer : {}".format(err,reqAdress))
+                self._proto.addEntry('ERROR   ',"SSL-Error - {} peer : {}".format(err,reqAdress))
                 client.shutdown(socket.SHUT_RDWR)
                 client.close()
                 continue
@@ -700,7 +701,10 @@ class ProxySocket(threading.Thread):
                             self._proto.addEntry('INFO    ',"Client-Msg-injected\r\n{}".format(str(injectedUrl.decode())))
                         clientblock = injectedUrl
                     
-                    #self.Sender.message_queues[self.server].put(clientblock)
+                    
+                    # Inject the User-Agent
+                    clientblock = self._inject_user_agent(clientblock)
+
                     self.send_immendiate(self.server, clientblock)
                     #self.message_queues[self.server].put(clientblock)
                     #myErg = self.server.sendall(clientblock)
@@ -817,6 +821,7 @@ class ProxySocket(threading.Thread):
         self.logger.debug("got real Webserver-{}-".format(webserver))        
         return webserver, port, myCam
 
+        
     def InjectRealUrl(self,orgRequest):
         readableRequest = orgRequest.decode()
         first_line = readableRequest.split('\n')[0]
@@ -1157,3 +1162,19 @@ class ProxySocket(threading.Thread):
         NewBlock = myNewBlock.encode()
         return NewBlock
         
+        
+    def _inject_user_agent(self,block_to_decode):
+        newAgent = 'User-Agent: LibVLC/3.0.6 (LIVE555 Streaming Media v2016.11.28)'
+        myNewBlock = ""
+        myNewArray = []
+        for line in block_to_decode.decode().split("\r\n"):
+            if ("USER-AGENT" in line.upper()):
+                line =newAgent
+            myNewArray.append(line)
+        
+        myNewArray = myNewArray[:-1]
+        for line in myNewArray:
+            myNewBlock += line +"\r\n"
+        
+        NewBlock = myNewBlock.encode()
+        return NewBlock
