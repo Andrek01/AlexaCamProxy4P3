@@ -1170,6 +1170,11 @@ class ProxySocket(threading.Thread):
         for line in block_to_decode.decode().split("\r\n"):
             if ("USER-AGENT" in line.upper()):
                 line =newAgent
+            if ("Range: npt=0.000-" in line):
+                line ='Range: npt=now-'
+            if ("a=range:npt=0-" in line):
+                line ='a=range:npt=now-'
+            
             myNewArray.append(line)
         
         myNewArray = myNewArray[:-1]
