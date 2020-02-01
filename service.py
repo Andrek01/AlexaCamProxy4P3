@@ -1150,15 +1150,30 @@ class ProxySocket(threading.Thread):
     def _inject_sequence_no(self,block_to_decode,act_sequence_no):
         myNewBlock = ""
         myNewArray = []
+        length_2_replace = ''
         for line in block_to_decode.decode().split("\r\n"):
             if ("CSEQ" in line.upper()):
                 line ="CSeq: " + str(act_sequence_no) + " "
+            
+            if ("Range: npt=0.000-" in line):
+                line ='Range: npt=now-'
+            
+            if ("a=range:npt=0-" in line):
+                line ='a=range:npt=now-'
+            
+            if ("CONTENT-LENGTH" in line.upper()):
+                length_2_replace = line
+                pass
+            
             myNewArray.append(line)
         
         myNewArray = myNewArray[:-1]
         for line in myNewArray:
             myNewBlock += line +"\r\n"
         
+        if length_2_replace != '':
+            newBlockLength = "Content-length: " +str(len(myNewBlock[myNewBlock.find("\r\n\r\n"):])-4)
+            myNewBlock.replace(length_2_replace,newBlockLength)
         NewBlock = myNewBlock.encode()
         return NewBlock
         
@@ -1170,10 +1185,6 @@ class ProxySocket(threading.Thread):
         for line in block_to_decode.decode().split("\r\n"):
             if ("USER-AGENT" in line.upper()):
                 line =newAgent
-            if ("Range: npt=0.000-" in line):
-                line ='Range: npt=now-'
-            if ("a=range:npt=0-" in line):
-                line ='a=range:npt=now-'
             
             myNewArray.append(line)
         
