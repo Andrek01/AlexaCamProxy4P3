@@ -1161,6 +1161,7 @@ class ProxySocket(threading.Thread):
             if ("a=range:npt=0-" in line):
                 line ='a=range:npt=now-'
             
+                 
             if ("CONTENT-LENGTH" in line.upper()):
                 length_2_replace = line
                 pass
@@ -1173,7 +1174,7 @@ class ProxySocket(threading.Thread):
         
         if length_2_replace != '':
             newBlockLength = "Content-length: " +str(len(myNewBlock[myNewBlock.find("\r\n\r\n"):])-4)
-            myNewBlock.replace(length_2_replace,newBlockLength)
+            myNewBlock = myNewBlock.replace(length_2_replace,newBlockLength)
         NewBlock = myNewBlock.encode()
         return NewBlock
         
