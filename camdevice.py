@@ -37,6 +37,7 @@ class Cam(object):
         self.Sessions_total = 0
         self.proxy_credentials= ''
         self.authorization = []
+        self.alexa_cam_modifiers = ''
     
 
 

@@ -71,8 +71,8 @@ class protocoll(object):
         if (myLog == None):
             return
         try:
-            if len (myLog) >= 1500:
-                myLog = myLog[0:1499]
+            if len (myLog) >= 2500:
+                myLog = myLog[0:2499]
         except:
             return
         myEntries = _text.split('\r\n')
@@ -382,11 +382,11 @@ class AlexaCamProxy4P3(SmartPlugin):
         self.proxy_auth_type=self.get_parameter_value('proxy_auth_type')
         self.video_buffer = self.get_parameter_value('video_buffer')
         self.port = self.get_parameter_value('port')
-        self.onyl_allow_own_IP = self.get_parameter_value('onyl_allow_own_IP')
+        self.only_allow_own_IP = self.get_parameter_value('only_allow_own_IP')
         self._proto = protocoll()
         self.cams = CamDevices()
         self.ClientThreads = []
-        self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.path_user_file,self.proxy_credentials,self.proxy_auth_type, self.onyl_allow_own_IP,self.sh)
+        self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.path_user_file,self.proxy_credentials,self.proxy_auth_type, self.only_allow_own_IP,self.sh)
         self.service.name = 'AlexaCamProxy4P3-Handler'
         self.TestSocket = None
 
@@ -569,8 +569,10 @@ class AlexaCamProxy4P3(SmartPlugin):
                         
                         if 'alexa_proxy_credentials' in item.conf:
                             cam.proxy_credentials = item.conf['alexa_proxy_credentials']
-
                         
+                        if 'alexa_cam_modifiers' in item.conf:
+                            cam.alexa_cam_modifiers = item.conf['alexa_cam_modifiers']
+                            
                         myStream='alexa_stream_{}'.format(i)
                         authorization = item.conf[myStream]
                         authorization = json.loads(authorization)
@@ -590,6 +592,8 @@ class AlexaCamProxy4P3(SmartPlugin):
                     except Exception as err:
                         self.logger.debug("CamProxy4AlexaP3: {}-wrong Stream Settings = {}".format(item.id(), err))
                 i +=1
+        
+        return None
             
             
     def parse_logic(self, logic):
@@ -844,6 +848,7 @@ class WebInterface(SmartPluginWebIf):
             newEntry['proxied_mb_total'] = "%.1f" % (Cam2Add.proxied_bytes / 1024.0 / 1024.0)
             newEntry['Sessions_total'] = Cam2Add.Sessions_total
             newEntry['last_Session_duration'] = Cam2Add.last_Session_duration
+            newEntry['alexa_cam_modifiers'] = Cam2Add.alexa_cam_modifiers
             
             if Cam2Add.last_Session != None:
                 newEntry['last_Session'] = str(Cam2Add.last_Session.strftime('Date: %a, %d %b %H:%M:%S %Z %Y'))

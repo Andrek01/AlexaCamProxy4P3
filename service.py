@@ -1151,7 +1151,34 @@ class ProxySocket(threading.Thread):
         myNewBlock = ""
         myNewArray = []
         length_2_replace = ''
+        set_del_Audio = False
         for line in block_to_decode.decode().split("\r\n"):
+            
+            if set_del_Audio == True:
+                if 'a=' in line:
+                    continue
+                if 'm=' in line:
+                    set_del_Audio = False
+            if self.actCam != None:         
+                if '/del_audio' in self.actCam.alexa_cam_modifiers.lower() and "m=audio" in line.lower():
+                    set_del_Audio = True
+                    continue
+            if ('m=video' in line):
+                if ('/mod_audio'):
+                    myNewArray.append(line)
+                    myNewArray.append('b=AS:50')
+                    continue
+            if ('m=audio' in line):
+                if ('/mod_audio'):
+                    myNewArray.append(line)
+                    myNewArray.append('b=AS:50')
+                    continue
+                    '''
+                    modAudio = line.split(" ")
+                    modAudio[1]="0"
+                    sep = " "
+                    line = sep.join(modAudio)
+                    '''
             if ("CSEQ" in line.upper()):
                 line ="CSeq: " + str(act_sequence_no) + " "
             
