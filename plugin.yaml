@@ -9,7 +9,7 @@ plugin:
     tester: psilo
     documentation: https://github.com/Andrek01  # url of documentation (wiki) page    
     version: 1.0.0                              # Plugin version
-    sh_minversion: 1.5.2                        # minimum shNG version to use this plugin
+    sh_minversion: 1.5.1                        # minimum shNG version to use this plugin
     multi_instance: False                       # plugin supports multi instance
     classname: AlexaCamProxy4P3                 # class containing the plugin
     keywords: Camera Alexa Show Spot Echo FireTV Amazon SmartHomeSkill CamerastreamController
