@@ -105,19 +105,11 @@ Please try out what value fits to your setup and Cam´s.
 
 proxy_url : Your public DynDNS-URL. 
 
+proxy_credentials: User:Password
+
+proxy_auth_type : Authentification-Type for the Proxy allowed values "DIGEST", "BASIC" and "NONE".
+
 onyl_allow_own_IP: If set to True the CameraProxy will only allow access from your own public IP, no other Client will get Access. If set to False also foreign IP-addresses will be accepted.
-
-path_user_file : Path and File to the User-Credential File created by htpasswd. If you are using BASIC-Authentication you have to specify the User-Credentials for the Camera-Proxy in the "alexa_csc_proxy_credentials" in the item file of the Alexa4P3 plugin. If no path_user_file is specified the plugin does not check any credentials. Authentication is set to "NONE".
-
-## Example for User-Credential file
-
-`cd /usr/local/smarthome/plugins/c/usr/local/smarthome/plugins/camproxy4alexap3/`
-
-`htpasswd -c ./.AlexaCamUser <YourUserName>`
-
-`Enter a password`
-
-`retype your password`
 
 
 
