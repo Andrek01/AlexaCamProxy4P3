@@ -59,3 +59,9 @@ Im vierten Tab werden Informationen zum SSL-Zertifikat angezeigt:
 
 .. image:: assets/webif4.jpg
    :class: screenshot
+
+Kommunikations-Schema
+
+.. image:: assets/CameraProxyScheme.jpg
+   :class: screenshot
+

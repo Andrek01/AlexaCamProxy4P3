@@ -28,6 +28,10 @@ If "proxy_Url" is set only Connections from the own IP-Adress will be accepted.
 
 ## Change-Log <a name="ChangeLog"/></a>
 
+#### 2020.02.25 - Version 1.0.0
+
+- added Testsocket in WebInterface with link to rtsp-URL for VLC-Player
+
 #### 2018.03.03 - Version 1.0.0
 
 - added Support for Basic/Digest Authentication to the CamProxy
@@ -46,7 +50,7 @@ Nothing special needed, see Needed software
 ### Needed software
 
 * running Plugin Alexa4P3
-* SmartHomeNG >= 1.5.2
+* SmartHomeNG >= 1.5.1
 * Python >= 3.0
 * for the WebInteface you need the http-module of SmartHomeNG
 * SmartHomeSkill with Payload V3 in Amazon Developer Console
@@ -109,7 +113,7 @@ proxy_credentials: User:Password
 
 proxy_auth_type : Authentification-Type for the Proxy allowed values "DIGEST", "BASIC" and "NONE".
 
-onyl_allow_own_IP: If set to True the CameraProxy will only allow access from your own public IP, no other Client will get Access. If set to False also foreign IP-addresses will be accepted.
+only_allow_own_IP: If set to True the CameraProxy will only allow access from your own public IP, no other Client will get Access. If set to False also foreign IP-addresses will be accepted.
 
 
 
