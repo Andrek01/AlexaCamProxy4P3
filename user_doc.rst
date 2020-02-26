@@ -7,13 +7,13 @@ CamProxy4AlexaP3
 Konfiguration
 =============
 
-Die Informationen zur Konfiguration des Plugins sind unter :doc:`/plugins_doc/config/camproxy4alexap3` beschrieben.
+Die Informationen zur Konfiguration des Plugins sind unter :doc:`/plugins_doc/config/alexacamproxy4p3` beschrieben.
 
 
 Web Interface
 =============
 
-Das CamProxy4AlexaP3 Plugin verfügt über ein Webinterface.Hier können Informationen zu aktuellen Streams, verbundenen
+Das AlexaCamProxy4p3 Plugin verfügt über ein Webinterface.Hier können Informationen zu aktuellen Streams, verbundenen
 Clients, aktiven Threads, zum SSL-Zertifikat überwacht werden. Es werden eine Historie mit gestreamten Sitzungen sowie 
 Informationen zu den letzten Sitzungen bereitgestellt.
 
@@ -30,7 +30,7 @@ Aufruf des Webinterfaces
 Das Plugin kann aus dem backend aufgerufen werden. Dazu auf der Seite Plugins in der entsprechenden
 Zeile das Icon in der Spalte **Web Interface** anklicken.
 
-Außerdem kann das Webinterface direkt über ``http://smarthome.local:8383/camproxy4alexap3`` aufgerufen werden.
+Außerdem kann das Webinterface direkt über ``http://smarthome.local:8383/alexacamproxy4p3`` aufgerufen werden.
 
 
 Beispiele
