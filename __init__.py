@@ -377,7 +377,6 @@ class AlexaCamProxy4P3(SmartPlugin):
         self.PATH_CERT = self.get_parameter_value('cert_path')
         self.PATH_PRIVKEY = self.get_parameter_value('cert_path_key') 
         self.proxyUrl = self.get_parameter_value('proxy_url')
-        self.path_user_file = self.get_parameter_value('path_user_file')
         self.proxy_credentials=self.get_parameter_value('proxy_credentials')
         self.proxy_auth_type=self.get_parameter_value('proxy_auth_type')
         self.video_buffer = self.get_parameter_value('video_buffer')
@@ -386,7 +385,7 @@ class AlexaCamProxy4P3(SmartPlugin):
         self._proto = protocoll()
         self.cams = CamDevices()
         self.ClientThreads = []
-        self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.path_user_file,self.proxy_credentials,self.proxy_auth_type, self.only_allow_own_IP,self.sh)
+        self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.proxy_credentials,self.proxy_auth_type, self.only_allow_own_IP,self.sh)
         self.service.name = 'AlexaCamProxy4P3-Handler'
         self.TestSocket = None
 

@@ -26,7 +26,7 @@ from .proxy_handler import Sender
 
 
 class ThreadedServer(threading.Thread):
-    def __init__(self,Proto, logger,port, video_buffer,cert_path,cert_path_key, Cams, ClientThreads,proxyUrl,path_user_file,proxy_credentials,proxy_auth_type,onyl_allow_own_IP,sh_instance):
+    def __init__(self,Proto, logger,port, video_buffer,cert_path,cert_path_key, Cams, ClientThreads,proxyUrl,proxy_credentials,proxy_auth_type,only_allow_own_IP,sh_instance):
         threading.Thread.__init__(self)
         self.sh = sh_instance
         self.logger = logger
@@ -46,11 +46,10 @@ class ThreadedServer(threading.Thread):
         self.cert_ciphers += 'ECDHE-RSA-AES128-SHA256:DHE-RSA-AES256-GCM-SHA384'
         self.proxyUrl = proxyUrl
         self.myIP = ''
-        self.path_user_file = path_user_file
         self.proxy_credentials=proxy_credentials
         self.proxy_auth_type=proxy_auth_type
         self._proto = Proto
-        self.onyl_allow_own_IP = onyl_allow_own_IP
+        self.only_allow_own_IP = only_allow_own_IP
         
         
         
@@ -118,11 +117,11 @@ class ThreadedServer(threading.Thread):
                 conn = client       # only for Tests
                 '''
                 # Check if only own IP is allowed
-                if (self.onyl_allow_own_IP == True):
+                if (self.only_allow_own_IP == True):
                     reqAdress = None
                     self.myIP = self.GetMyIP(self.proxyUrl)
                     reqAdress = address[0]
-                    if self.myIP != reqAdress:
+                    if self.myIP != reqAdress and reqAdress != "127.0.0.1":
                         client.shutdown(socket.SHUT_RDWR)
                         client.close()
                         continue
@@ -147,7 +146,7 @@ class ThreadedServer(threading.Thread):
                             self._proto.addEntry('ERROR   ',"While storing proxied Bytes to : {}".format(t.name))
                             pass
                         
-                self.ClientThreads.append(ProxySocket(self._proto,conn,address,self.logger,self.Cams,self.video_buffer,self.path_user_file,self.proxy_credentials,self.proxy_auth_type,self.proxyUrl,self.port,self.sh))
+                self.ClientThreads.append(ProxySocket(self._proto,conn,address,self.logger,self.Cams,self.video_buffer,self.proxy_credentials,self.proxy_auth_type,self.proxyUrl,self.port,self.sh))
                 aktThread +=1
                 if aktThread > 99999:
                     aktThread = 1
@@ -172,7 +171,7 @@ class ThreadedServer(threading.Thread):
 
             
 class ProxySocket(threading.Thread):
-    def __init__(self,Proto, client, address,logger,cams,videoBuffer=524280, path_User_File = '',proxy_credentials='',proxy_auth_type='NONE',proxy_Url = None,port=0, sh_instance = None):
+    def __init__(self,Proto, client, address,logger,cams,videoBuffer=524280,proxy_credentials='',proxy_auth_type='NONE',proxy_Url = None,port=0, sh_instance = None):
         threading.Thread.__init__(self)
         self.sh = sh_instance
         self.logger = logger
@@ -190,7 +189,6 @@ class ProxySocket(threading.Thread):
         self.peer = ''
         self.actCam = None
         self.last_Session_Start = datetime.now()
-        self.path_User_File = path_User_File
         self.Credentials_Checked = False
         self.Authorization_send = False
         self.proxy_credentials=proxy_credentials
@@ -211,6 +209,7 @@ class ProxySocket(threading.Thread):
         self.debug_level = 99
         self.handshake = 0
         self.Sender = Sender( self._proto,self.logger,self.sh,self.message_queues)
+        self.teardown_msg = b'TEARDOWN rtsp://GrandStreamGV3500 RTSP/1.0\r\nSession: 65693745\r\nUser-Agent: LibVLC/3.0.6 (LIVE555 Streaming Media v2016.11.28)\r\nCSeq: 6 \r\n\r\n'
         
         
         
@@ -460,6 +459,14 @@ class ProxySocket(threading.Thread):
                         if 'PLAY' in serverblock.decode() and 'Session' in serverblock.decode():
                             self.handshake = 3      # got PLAY                            
                 except:
+                    '''
+                    int_values = [x for x in serverblock]
+                    for myValue in int_values:
+                        if myValue > 0:
+                            self.Sender.message_queues[self.client].put(serverblock)
+                            return
+                    self._proto.addEntry('WARNING ',"removed Zero-Bytes from Server-Stream")
+                    '''
                     self.Sender.message_queues[self.client].put(serverblock)
                     return
 
@@ -480,7 +487,7 @@ class ProxySocket(threading.Thread):
                             #self.message_queues[self.server].append(myResponse)
                             #self.message_queues[self.server].put(myResponse)
                             #self.Sender.message_queues[self.server].put(myResponse)
-                            self.send_immendiate(self.server, myResponse)
+                            self.send_immediate(self.server, myResponse)
                             if self.debug_level > 5:
                                 self._proto.addEntry('INFO P>S',"Send Authorization to Camera\r\n"+ myResponse.decode())
                             self.server_auth = True
@@ -513,7 +520,10 @@ class ProxySocket(threading.Thread):
                 #self.message_queues[self.client].append(serverblock)
                 #self.message_queues[self.client].put(serverblock)
                 #self.Sender.message_queues[self.client].put(serverblock)
-                self.send_immendiate(self.client, serverblock)
+                self.Sender.message_queues[self.client].put(serverblock)
+                ############################
+                #self.send_immediate(self.client, serverblock)
+                ############################
                 #myErg = self.client.sendall(serverblock)
                 #if myErg != None:
             else:
@@ -569,7 +579,7 @@ class ProxySocket(threading.Thread):
                     #self.Sender.message_queues[self.client].put(AuthResponse)
                     #self.message_queues[self.client].append(AuthResponse)
                     #self.client.sendall(AuthResponse)
-                    self.send_immendiate(self.client, AuthResponse)
+                    self.send_immediate(self.client, AuthResponse)
                     self.Authorization_send = True
                     if self.debug_level > 5:
                         self.logger.debug(self.CreateDigestAuthResponse())
@@ -578,7 +588,7 @@ class ProxySocket(threading.Thread):
                 elif 'BASIC' in self.proxy_auth_type:
                     AuthResponse =self.CreateBasicAuthResponse().encode()
                     AuthResponse = self._inject_sequence_no(AuthResponse,self.client_last_Cseq)
-                    self.send_immendiate(self.client, AuthResponse)
+                    self.send_immediate(self.client, AuthResponse)
                     #self.Sender.message_queues[self.client].put(AuthResponse)
                     #self.message_queues[self.client].put(AuthResponse)
                     #self.message_queues[self.client].append(AuthResponse)
@@ -601,7 +611,7 @@ class ProxySocket(threading.Thread):
                     #self.message_queues[self.client].append(ForbiddenResponse)
                     #self.message_queues[self.client].put(ForbiddenResponse)
                     #self.Sender.message_queues[self.client].put(ForbiddenResponse)
-                    self.send_immendiate(self.client, ForbiddenResponse)
+                    self.send_immediate(self.client, ForbiddenResponse)
                     if self.debug_level > 5:
                         self.logger.debug(self.CreateForbiddenResponse())
                         self._proto.addEntry('INFO P>C',ForbiddenResponse.decode())
@@ -705,7 +715,7 @@ class ProxySocket(threading.Thread):
                     # Inject the User-Agent
                     clientblock = self._inject_user_agent(clientblock)
 
-                    self.send_immendiate(self.server, clientblock)
+                    self.send_immediate(self.server, clientblock)
                     #self.message_queues[self.server].put(clientblock)
                     #myErg = self.server.sendall(clientblock)
                     #if myErg != None:
@@ -719,7 +729,9 @@ class ProxySocket(threading.Thread):
 
                 
             if 'TEARDOWN' in clientblock.decode():
-                #pass
+                clientblock = self._inject_sequence_no(clientblock, self.server_last_Cseq)
+                clientblock = self.InjectRealUrl(clientblock)
+                self.send_immediate(self.server, clientblock)
                 self.stop('TEARDOWN')
 
 
@@ -727,9 +739,13 @@ class ProxySocket(threading.Thread):
             self.stop('Client-hang up')
             if self.handshake == 1:
                 self._proto.addEntry('ERROR   ','Client hang up after SDP-Information - perhaps you have specified a wrong Video/Audio-Setting to your Alexa-Device')
-
+            if self.server_auth:
+                clientblock = self.teardown_msg
+                clientblock = self._inject_sequence_no(clientblock, self.server_last_Cseq)
+                clientblock = self.InjectRealUrl(clientblock)
+                self.send_immediate(self.server, clientblock)
     
-    def send_immendiate(self,sock2send,next_msg):
+    def send_immediate(self,sock2send,next_msg):
         time1 = datetime.now()
         blocklength = len(next_msg)
         if self.debug_level > 10:
@@ -1157,6 +1173,10 @@ class ProxySocket(threading.Thread):
             if set_del_Audio == True:
                 if 'a=' in line:
                     continue
+                if 'b=' in line:
+                    continue
+                if 'c=' in line:
+                    continue
                 if 'm=' in line:
                     set_del_Audio = False
             if self.actCam != None:         
@@ -1186,7 +1206,7 @@ class ProxySocket(threading.Thread):
                 line ='Range: npt=now-'
             
             if ("a=range:npt=0-" in line):
-                line ='a=range:npt=now-'
+                line ='a=npt=now-'
             
                  
             if ("CONTENT-LENGTH" in line.upper()):

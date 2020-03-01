@@ -109,7 +109,7 @@ Please try out what value fits to your setup and Cam´s.
 
 proxy_url : Your public DynDNS-URL. 
 
-proxy_credentials: User:Password
+proxy_credentials: User:Password, this are the settings for the CamProxy himself, you can define it as wish
 
 proxy_auth_type : Authentification-Type for the Proxy allowed values "DIGEST", "BASIC" and "NONE".
 
