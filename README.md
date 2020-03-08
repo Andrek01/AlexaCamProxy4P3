@@ -7,6 +7,9 @@
 2. [ChangeLog](#ChangeLog) <sup><span style="color:red"> **Neu**</sup>
 3. [Plugin - Configuration](#config) <sup><span style="color:red"> **Neu**</sup>
 4. [Network - Configuration](#network) <sup><span style="color:red"> **Neu**</sup>
+	- [Setup A](#SetupA) - household typical network and infrastructure using existing certificate 
+	- [Setup B](#SetupB) - household typical network and infrastructure using new Domain and certificate 
+	- [Setup C](#SetupC) - Setup with a official Domain or a DynDNS-Domain which allows you to create Sub-Domains and a working NameServer in your LAN
 5. [Web Interface](#webinterface) <sup><span style="color:red"> **Neu**</sup>
 6. [Testsocket](#testsocket) <sup><span style="color:red"> **Neu**</sup>
 7. [Communication scheme](#scheme) <sup><span style="color:red"> **Neu**</sup>
@@ -24,7 +27,8 @@ The Plugin provides private Cameras in the local network for Amazon devices like
 So it´s not possible to use private cameras (on local networks) without any cheats,
 this plugin will fix this problem
 
-## How it works: <a name="howitworks"/></a>
+<a name="howitworks"/></a>
+## How it works: 
 
 The plugin provides a socket on Port 443 and listens to incoming connections. If there is a request to a proxied camera the plugin injects the real URL of the stream in the request, creates a second socket and connects to the camera.
 If "only_allow_own_IP" is set to true only Connections from the own IP-Adress, Local-Host and from the Local network will be accepted.
@@ -33,8 +37,8 @@ All connection-tries from other hosts will be refused at once.
 
 <strong>The Option "only_allow_own_IP" will only work in non routed networks. If you have a routed network it should not be neccessary to protect the AlexaCamProxy with this option cause you can handle it before.</strong>
 
-
-## Change-Log <a name="ChangeLog"/></a>
+<a name="ChangeLog"/></a>
+## Change-Log
 
 #### 2020.03.04 - Version 1.0.0
 
@@ -90,7 +94,8 @@ Nothing special needed, see Needed software
 * all Cameras with RTSP-Protocoll and Handling OPTIONS/DESCRIBE/PLAY/TEARDOWN
 * only resolutions with 1080p or less will be supported by the Alexa-Devices, depending on the device you would like to use.
 
-## Plugin-Configuration<a name="config"/></a>
+<a name="config"/></a>
+## Plugin-Configuration
 
 ## plugin.yaml
 
@@ -132,14 +137,15 @@ only_allow_own_IP: If set to True the CameraProxy will only allow access from yo
 
 
 
-
-## Network-Configuration<a name="network"/></a>
+<a name="network"/></a>
+## Network-Configuration
 
 What is needed ?
 Tue to the fact the Amazon-Devices only connects to a secure SSL-Cam you need an URL with a guilty, not self signed certificate.
 To get it work there are several solutions for this issue.
 
-### 1.) Easiest setup for a common household network with a DynDNS-Domain and existing Lets`Encrypt-Certificate for the NGINX
+<a name="SetupA"/></a>
+### A.) Easiest setup for a common household network with a DynDNS-Domain and existing Lets`Encrypt-Certificate for the NGINX
 
 When you are using the Alexa4P3-Plugin you already have a Domain with Let's Encrypt Certificate. You can use this Certificate also for the Cam-Proxy.
 <strong>Its not possible to run the AlexaCamProxy4P3 behind a NGINX and using the NGINX as reverse Proxy, the NGINX is not supporting Streams</strong>
@@ -183,7 +189,8 @@ For other installations you should know where your Config is located or you have
 
 That`s it.
 
-### 2.) Setup for a common household network with a DynDNS-Domain and seperat Domain for the CamProxies Lets`Encrypt-Certificate
+<a name="SetupB"/></a>
+### B.) Setup for a common household network with a DynDNS-Domain and seperate Domain for the CamProxies Lets`Encrypt-Certificate
 
 If you have a DynDNS-Account which allows you to define more than one DynDNS or you would like to setup a new DynDNS-Account you can do the configuration as follows.
 
@@ -197,7 +204,7 @@ sudo certbot certonly --rsa-key-size 4096 --webroot -w /var/www/letsencrypt -d <
 <strong>Take care that the port for getting a new certificate are forwarded on you router ! Port 80 is needed to verify the IP.
 </strong>
 
-After you got your certificate you have to move it to the plugin folder (see section 1)
+After you got your certificate you have to move it to the plugin folder (see section A)
 
 Now you can change the IP of you new DynDNS-Domain to the IP of your smarthomeNG-machine which is running the AlexaCamProxy.
 
@@ -218,11 +225,12 @@ Everytime you have to renew the certificate you have to change the IP at your Dy
 
 That`s it
 
-### 3.) Setup with a official Domain or a DynDNS-Domain which allows you to create Sub-Domains and a working NameServer in your LAN
+<a name="SetupC"/></a>
+### C. ) Setup with a official Domain or a DynDNS-Domain which allows you to create Sub-Domains and a working NameServer in your LAN
 
 You have to create a Sub-Domain.
 Create a certificate for the Sub-Domain.
-Copy the certifcate to the plugin folder (see section 1)
+Copy the certifcate to the plugin folder (see section A)
 You have to add the entries in your NameServer-config to point the new Sub-Domain to your smarthomeNG-machine.
 
 <strong>++advantage :++</strong>
@@ -242,11 +250,37 @@ No items or attributes have to be defined. On Startup the Plugin generates the n
 
 In my point of view, no further description is needed
 
-## Communication scheme <a name="scheme"/></a>
+<a name="webinterface"/></a>
+## Web-Interface: 
+
+The Plugin has a Web-Interface.
+You can see the number auf provided Camś , the allowed IP's, the configured Auhtorization-Type and the Credentials for the Proxy himself.
+You can Switch ON/OFF the Testsocket.
+
+On the fist tab you can see the Cam's that are provided, some statistics for each cam and the last request for each cam. You can change your settings, user and password for the authentication at the AlexaCamProxy. It's possible to write the changes directly to the plugin.yaml file.
+Each entry for a proxied Cam will have a Link to the Testsocket.
+
+On the second page a communication log is show, you can. It's a small self rotating log that will be only stored in the actual instance of the plugin. After restarting smarthomeNG it will be empty. You can delete the protocoll manually.
+
+On the third page you can see the active Threads and some Details of the running Threads. The last Thread will be shown as "Dead". The Thread was already ended but still shown on this page.The last dead Threads will be cleaned up each time a new Thread is started or the plugin will be onloaded.
+
+On the fourth page you can see some details about you certificate and the supported ciphers. The experiation date of the certificate will be interesting for most of the users.
+
+<a name="testsocket"/></a>
+## Testsocket :
+When the Testsocket is enabled (see Web-Interface) you can try to connect to your Cam's via the AlexaCamProxy4P3 using VLC-Player or any other Player. The Testsocket provides a Non-SSL  listening on <strong>Port5001</strong>
+The shown unique URL's for the Cameras on Tab one have a link to the Testsocket.
+When asking for a Cam on the Testsocket it will connect via SSL to the real Socket and the connection will be the same as an Alexa-Device asks for.
+You can test the work of the AlexaCamProxy4P3-Plugin with the Testsocket.
+The human readable communication will be displayed in the communication log.
+
+<a name="scheme"/></a>
+## Communication scheme
 
 ![](./assets/CameraProxyScheme.jpg)
 
-## Known issues<a name="issues"/></a>
+<a name="issues"/></a>
+## Known issues
 
 We got the experience that not all Alexa-Devices can handle all the Cam's in the same way. For example an Reolink Camera will work an Echo Show 8 with Audio on FireTv it only works without Audio.
 
