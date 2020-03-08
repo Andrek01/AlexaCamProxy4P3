@@ -29,6 +29,7 @@ class Sender(threading.Thread):
         self.debug_level = 99
         self.client = None
         self.server = None
+        self.start_teardown = False
     
     def run(self):
         self.alive = True
@@ -44,12 +45,21 @@ class Sender(threading.Thread):
                     continue
                     
                 else:
+                    # If Teardown startet dont continue to send to Client 
+                    if myActSock == self.client and self.start_teardown:
+                        if self.debug_level > 5:
+                            self._proto.addEntry('INFO (S)',self.name+"Teardown startet - discarding Messages")
+                        continue
+                    
+                    
                     if (self.debug_level > 5):
                         try:
                             self._proto.addEntry('INFO    ', 'sending "%s" to %s' % (next_msg, myActSock.getpeername()))
                             self._proto.addEntry('INFO (S)','Queue-Length-CLIENT : {} / Queue-Length-SERVER : {}'.format(self.message_queues[self.client].qsize(),self.message_queues[self.server].qsize()))
                         except Exception as err:
                             pass
+
+                    
                     if self.debug_level > 5:
                         try:
                             if myActSock == self.server:

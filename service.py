@@ -50,9 +50,49 @@ class ThreadedServer(threading.Thread):
         self.proxy_auth_type=proxy_auth_type
         self._proto = Proto
         self.only_allow_own_IP = only_allow_own_IP
+        self.myLan = self._getmyLan()
         
         
-        
+    def _getmyLan(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.connect(("8.8.8.8", 80))
+        myIp = sock.getsockname()[0]
+        sock.close()
+    
+        proc = Popen(['ifconfig'], stdout=PIPE, stderr=PIPE)
+        out, err = proc.communicate()
+        exitcode = proc.returncode
+        myString = out.decode().split("\n")
+        for line in myString:
+            if (myIp in line):
+                myLine = line
+                break
+    
+        print (myLine)
+        fields=myLine.split(" ")
+        for field in fields:
+            if "mask" in field.lower():
+                print (field)
+                strMask = field.split(":")
+                print (strMask[1])
+                myNetMask = strMask[1]
+                break
+    
+        myCount = myNetMask.split("255.")
+    
+        if "255.255.255.255" in myNetMask:
+            myLan = ".".join(myIp.split(".")[:4])
+        elif "255.255.255.0" in myNetMask:
+            myLan = ".".join(myIp.split(".")[:3])
+        elif "255.255.0.0" in myNetMask:
+            myLan = ".".join(myIp.split(".")[:2])
+        elif "255.0.0.0" in myNetMask:
+            myLan = ".".join(myIp.split(".")[:1])
+    
+        # posTest = myIp.find(myLan)
+    
+        return myLan
+
             
 
     def GetMyIP(self, myURL):
@@ -113,15 +153,14 @@ class ThreadedServer(threading.Thread):
             try:
 
                 conn = context.wrap_socket(client, server_side=True)
-                '''
-                conn = client       # only for Tests
-                '''
+
                 # Check if only own IP is allowed
                 if (self.only_allow_own_IP == True):
                     reqAdress = None
                     self.myIP = self.GetMyIP(self.proxyUrl)
                     reqAdress = address[0]
-                    if self.myIP != reqAdress and reqAdress != "127.0.0.1":
+                    if self.myIP != reqAdress or reqAdress != "127.0.0.1" or reqAdress.find(self.myLan) != 0:
+                        self._proto.addEntry('WARNING ',"Request from - {} - Only own IP's allowed - Connection refused - closed Socket ".format(reqAdress))                        
                         client.shutdown(socket.SHUT_RDWR)
                         client.close()
                         continue
@@ -210,6 +249,10 @@ class ProxySocket(threading.Thread):
         self.handshake = 0
         self.Sender = Sender( self._proto,self.logger,self.sh,self.message_queues)
         self.teardown_msg = b'TEARDOWN rtsp://GrandStreamGV3500 RTSP/1.0\r\nSession: 65693745\r\nUser-Agent: LibVLC/3.0.6 (LIVE555 Streaming Media v2016.11.28)\r\nCSeq: 6 \r\n\r\n'
+        self.OK_msg = b'RTSP/1.0 200 OK\r\nCSeq: 9\r\nDate:\r\n\r\n' 
+ 
+
+        self.start_teardown = False
         
         
         
@@ -321,7 +364,7 @@ class ProxySocket(threading.Thread):
                         self._proto.addEntry('ERROR   ','Problem while getting Server-DATA')
                         self.stop("Problem while getting Server-DATA")
 
-                elif myActSock == self.client:
+                elif myActSock == self.client and not self.start_teardown:
                     try:
                         if self.debug_level > 5:
                             self._proto.addEntry('FLOW-CTL','Reading on Proxy from Client')
@@ -329,7 +372,9 @@ class ProxySocket(threading.Thread):
 
                     except:
                         self._proto.addEntry('ERROR   ','Problem while getting Client-DATA')
+                        self.mysocks.remove(myActSock)
                         self.stop("Problem while getting Client-DATA")
+                        #continue
                     
             '''
             for myActSock in writable:
@@ -432,6 +477,21 @@ class ProxySocket(threading.Thread):
                     self._proto.addEntry('INFO    ','Stop - Read-Message from : {}'.format(mySocket.getpeername()[0]))
                 
             if serverblock:
+                
+                # Find Unbreakable Line
+                try:
+                    if (serverblock.find(b'\r\n\r\n') > 0):
+                        try:
+                            unbreakableLine = serverblock.decode()
+                        except:
+                            msg2Send = serverblock.split(b'\r\n\r\n')
+                            msg2Send[0] += b'\r\n\r\n'
+                            serverblock = msg2Send[0]
+                            self._proto.addEntry('WARNING ','!! Break unbreakable Line !!\r\n'+ str(msg2Send[1]))
+                            self._proto.addEntry('WARNING ','!! Break unbreakable Line !!\r\n'+ serverblock.decode())
+                except:
+                    pass
+                
                 try:
                     if self.debug_level > 5:
                         self.Server_Block_Length.append(len(serverblock))
@@ -628,13 +688,6 @@ class ProxySocket(threading.Thread):
                 if self.debug_level > 5:
                     self._proto.addEntry('INFO    ',"reminded DESCRIBE from Client\r\n"+self.server_describe.decode())            
             
-            
-            
-                
-
-                
-            
-            
                    
             # Send data to Server if connected
                                         
@@ -714,26 +767,46 @@ class ProxySocket(threading.Thread):
                     
                     # Inject the User-Agent
                     clientblock = self._inject_user_agent(clientblock)
-
-                    self.send_immediate(self.server, clientblock)
-                    #self.message_queues[self.server].put(clientblock)
-                    #myErg = self.server.sendall(clientblock)
-                    #if myErg != None:
                     
+                    if 'TEARDOWN' in clientblock.decode():
+                        self.start_teardown = True
+                        self.Sender.start_teardown = True
+                        # Send OK-Response Immediate
+                        respTime = 'Date: ' + datetime.now().strftime("%a, %b %d %Y %H:%m:%S GMT")
+                        msg2send = self.OK_msg.decode().replace("Date:",respTime).encode()
+                        msg2send = self._inject_sequence_no(msg2send, self.client_last_Cseq)
+                        self.send_immediate(self.client, msg2send)
+                        if self.debug_level > 5:
+                            self._proto.addEntry('INFO P>C',msg2send.decode())
+                        
+                        clientblock = self._inject_sequence_no(clientblock, self.server_last_Cseq)
+                        clientblock = self.InjectRealUrl(clientblock)
+                        if (self.authenticate != ""):
+                            clientblock = self._inject_line(clientblock, self.authenticate)
+                        self.send_immediate(self.server, clientblock)
+                        self.stop('TEARDOWN')
+
                     if "\r\n" in clientblock.decode():
                         if self.debug_level > 5:
                             self._proto.addEntry('INFO P>S',clientblock.decode())
                         #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
+
+
+                    self.send_immediate(self.server, clientblock)
+                    #self.message_queues[self.server].put(clientblock)
+
+                    
+                    
             except err as Exception:
                 self.logger.debug("Error while server-send {}".format(err))
 
-                
+            '''                
             if 'TEARDOWN' in clientblock.decode():
                 clientblock = self._inject_sequence_no(clientblock, self.server_last_Cseq)
                 clientblock = self.InjectRealUrl(clientblock)
                 self.send_immediate(self.server, clientblock)
                 self.stop('TEARDOWN')
-
+            '''
 
         else:
             self.stop('Client-hang up')

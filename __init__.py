@@ -880,6 +880,13 @@ class WebInterface(SmartPluginWebIf):
         # Show the public IP
         try:
             myPublicIP = self.plugin.service.myIP
+            if (self.plugin.only_allow_own_IP):
+                SubNetTest = self.plugin.service.myLan.split(".")
+                myLan = self.plugin.service.myLan
+                SubNetTest = len(SubNetTest)
+                for i in range(SubNetTest-2,2):
+                    myLan += '.*'
+                myPublicIP += ' / 127.0.0.1 / '+myLan
         except Exception as err:
             print("Error while looking for public IP :",err )
         try:
