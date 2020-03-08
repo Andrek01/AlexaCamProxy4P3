@@ -152,8 +152,6 @@ class ThreadedServer(threading.Thread):
             client, address = self.sock.accept()
             try:
 
-                conn = context.wrap_socket(client, server_side=True)
-
                 # Check if only own IP is allowed
                 if (self.only_allow_own_IP == True):
                     reqAdress = None
@@ -164,6 +162,8 @@ class ThreadedServer(threading.Thread):
                         client.shutdown(socket.SHUT_RDWR)
                         client.close()
                         continue
+                    
+                conn = context.wrap_socket(client, server_side=True)
             except Exception as err:
                 self.logger.error("ProxyCam4AlexaP3: SSL-Error - {} peer : {}".format(err,reqAdress))
                 self._proto.addEntry('ERROR   ',"SSL-Error - {} peer : {}".format(err,reqAdress))

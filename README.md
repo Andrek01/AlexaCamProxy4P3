@@ -8,7 +8,7 @@
 3. [Plugin - Configuration](#config) <sup><span style="color:red"> **Neu**</sup>
 4. [Network - Configuration](#network) <sup><span style="color:red"> **Neu**</sup>
 	- [Setup A](#SetupA) - household typical network and infrastructure using existing certificate 
-	- [Setup B](#SetupB) - household typical network and infrastructure using new Domain and certificate 
+	- [Setup B](#SetupB) - household typical network and infrastructure using new Domain and certificate (still searching for supporting DnyDNS-Provider)
 	- [Setup C](#SetupC) - Setup with a official Domain or a DynDNS-Domain which allows you to create Sub-Domains and a working NameServer in your LAN
 5. [Web Interface](#webinterface) <sup><span style="color:red"> **Neu**</sup>
 6. [Testsocket](#testsocket) <sup><span style="color:red"> **Neu**</sup>
@@ -115,7 +115,7 @@ AlexaCamProxy4P3:
     only_allow_own_IP: true
 ```
 
-<strong>Please do not use "proxy" in your proxy_credentials. On Test-Sockets the VLC-Player will get in trouble with it, because there is a special handling for "proxy:" in VLC-Player</strong>
+<strong>Please do not use "proxy" in your proxy_credentials. On Test-Sockets the VLC-Player will get in trouble with it, because there is a special handling for "proxy" in VLC-Player</strong>
 
 cert_path : File with your fullchain.pem for the URL where you want to reach your  proxied cameras
 
@@ -127,7 +127,7 @@ video_buffer : Size for the Videobuffer for streaming. Standard is 524280 bytes.
 
 Please try out what value fits to your setup and Cam´s.
 
-proxy_url : Your public DynDNS-URL. 
+proxy_url : Your Domain where the AlexaCamProxy4P3 is reachable
 
 proxy_credentials: User:Password, this are the settings for the CamProxy himself, you can define it as wish
 
@@ -192,6 +192,8 @@ That`s it.
 <a name="SetupB"/></a>
 ### B.) Setup for a common household network with a DynDNS-Domain and seperate Domain for the CamProxies Lets`Encrypt-Certificate
 
+### still searching for supporting DnyDNS-Provider, this will not work with all DynDns-Providers
+
 If you have a DynDNS-Account which allows you to define more than one DynDNS or you would like to setup a new DynDNS-Account you can do the configuration as follows.
 
 Create your new Domain at your DynDNS-Provider - this new Domain should point to your Router - later on you have to change it.
@@ -215,12 +217,13 @@ For example :
 
 After changing the IP you can test the communication with a simple "ping" to your new domain. You should get a ping-answer from your local host.
 
-<strong>++advantage :++</strong>
+### <strong>advantage :</strong>
+
 For this solution its not neccessary to move the NGINX from Port 443.
 No additional portforwarding is needed on your router.
 You can be sure your AlexaCamProxy will only be reachable inside your local network.
 
-<strong>++disadvantage :++</strong>
+### <strong>disadvantage :</strong>
 Everytime you have to renew the certificate you have to change the IP at your DynDNS-Provider, after getting the certificate you have to change it back.
 
 That`s it
@@ -233,13 +236,13 @@ Create a certificate for the Sub-Domain.
 Copy the certifcate to the plugin folder (see section A)
 You have to add the entries in your NameServer-config to point the new Sub-Domain to your smarthomeNG-machine.
 
-<strong>++advantage :++</strong>
+### <strong>advantage :</strong>
 For this solution its not neccessary to move the NGINX from Port 443.
 No additional portforwarding is needed on your router.
 You can be sure your AlexaCamProxy will only be reachable inside your local network.
 You dont have to make any changes on IP`s, DynDNS-Accounts or something else
 
-<strong>++disadvantage :++</strong>
+### <strong>disadvantage :</strong>
 None
 
 That`s it
