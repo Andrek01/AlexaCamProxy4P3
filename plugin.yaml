@@ -55,12 +55,6 @@ parameters:
         description:
             de: 'DynDNS URL zur Prüfung der eigenen oeffentlichen IP'
             en: 'DynDNS Url to verify Access only from the own IP'          
-    path_user_file:
-        type: str
-        default: ''
-        description:
-            de: 'Pfad zur htpasswd-Datei welche beim Zugriff mit BASIC Authorisation verwendet wird'
-            en: 'Path to the htpasswd file which contains the Credentials to access while using BASIC authorization'          
     proxy_credentials:
         type: str
         default: ''
@@ -77,5 +71,5 @@ parameters:
         type: bool
         default: true
         description:
-            de: 'legt fest ob nur Zugriffe von der eigenen öffentlich IP zulässig sind'
-            en: 'if true only Access from the own public IP is allowed'
+            de: 'legt fest ob nur Zugriffe von der eigenen öffentlich IP, dem eigenen LAN und Local-Host zulässig sind'
+            en: 'if true only Access from the own public IP, the LAN and the local host is allowed'

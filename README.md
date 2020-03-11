@@ -35,7 +35,7 @@ If "only_allow_own_IP" is set to true only Connections from the own IP-Adress, L
 The Local-Host Access is needed for the Testsocket.
 All connection-tries from other hosts will be refused at once.
 
-<strong>The Option "only_allow_own_IP" will only work in non routed networks. If you have a routed network it should not be neccessary to protect the AlexaCamProxy with this option cause you can handle it before.</strong>
+<strong>The Option "only_allow_own_IP" will only work in non routed networks. If you have a routed network it should not be neccessary to protect the AlexaCamProxy with this option cause you can handle it before. In this case set the condition only_allow_own_IP = false</strong>
 
 <a name="ChangeLog"/></a>
 ## Change-Log

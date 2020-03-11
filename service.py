@@ -157,7 +157,7 @@ class ThreadedServer(threading.Thread):
                     reqAdress = None
                     self.myIP = self.GetMyIP(self.proxyUrl)
                     reqAdress = address[0]
-                    if self.myIP != reqAdress or reqAdress != "127.0.0.1" or reqAdress.find(self.myLan) != 0:
+                    if self.myIP != reqAdress and reqAdress != "127.0.0.1" and reqAdress.find(self.myLan) != 0:
                         self._proto.addEntry('WARNING ',"Request from - {} - Only own IP's allowed - Connection refused - closed Socket ".format(reqAdress))                        
                         client.shutdown(socket.SHUT_RDWR)
                         client.close()
