@@ -374,85 +374,8 @@ class ProxySocket(threading.Thread):
                         self._proto.addEntry('ERROR   ','Problem while getting Client-DATA')
                         self.mysocks.remove(myActSock)
                         self.stop("Problem while getting Client-DATA")
-                        #continue
-                    
-            '''
-            for myActSock in writable:
-                #==============================
-                try:
-                    next_msg = b''
-                    next_msg = self.message_queues[myActSock].get_nowait()
-                except queue.Empty:
-                    pass
-                    # No messages waiting so stop checking for writability.
-                    #self._proto.addEntry('INFO    ', 'output queue for'+ str(myActSock.getpeername())+ 'is empty')
-                    #outputs.remove(s)
-                else:
-                    #self._proto.addEntry('INFO    ', 'sending "%s" to %s' % (next_msg, myActSock.getpeername()))
-                    #s.send(next_msg)
-                    if myActSock == self.server:
-                        myRcv = 'P>S' 
-                    else:
-                        myRcv = 'P>C'
-                    
-                    
-                    if (self.server_url and self.debug_level > 5):
-                        self._proto.addEntry('INFO    ','Queue-Length-CLIENT : {} / Queue-Length-SERVER : {}'.format(self.message_queues[self.client].qsize(),self.message_queues[self.server].qsize()))
-                    if self.debug_level > 5:
-                        self._proto.addEntry('INFO    ',"Block-length : {}".format(len(next_msg)))
-                        self._proto.addEntry('INFO '+myRcv,'sending DATA to {}'.format(myActSock.getpeername()[0]))
-                        self.logger.debug('sending DATA to {}'.format(myActSock.getpeername()[0]))
-                    self._proto.addEntry('INFO    ','Start - Send-Message to : {}'.format(myActSock.getpeername()[0]))
-                    while len(next_msg) > 0:
-                        sent = myActSock.send(next_msg)
-                        if sent < len(next_msg):
-                            next_msg = next_msg[sent:]
-                        else:
-                            break
-                    self._proto.addEntry('INFO    ','Stop - Send-Message to : {}'.format(myActSock.getpeername()[0]))
-                
-
-                #==============================
-
-                if len(self.message_queues[myActSock]) >= 1:
-                    try:
-                        next_msg = b''
-                        #next_msg = self.message_queues[myActSock][0]
-                        #del self.message_queues[myActSock][0]
-                        next_msg = message_queues[myActSock].get_nowait()
-                        if myActSock == self.server:
-                            myRcv = 'P>S' 
-                            
-                        else:
-                            myRcv = 'P>C'
-                        
-                        self._proto.addEntry('INFO    ','Send-Message to : {}'.format(myActSock))
-                        if (self.server_url):
-                            self._proto.addEntry('INFO    ','Queue-Length-CLIENT : {} / Queue-Length-SERVER : {}'.format(len(self.message_queues[self.client]),len(self.message_queues[self.server])))
-                        #myActSock.sendall(next_msg)
-                        while len(next_msg) > 0:
-                            sent = myActSock.send(next_msg)
-                            if sent < len(next_msg):
-                                next_msg = next_msg[sent:]
-                            else:
-                                break
-                        try:
-                            self._proto.addEntry('INFO    ',next_msg.decode())
-                        except:
-                            pass
-                        self._proto.addEntry('INFO    ',"Block-length : {}".format(len(next_msg.decode())))
-                        self._proto.addEntry('INFO '+myRcv,'sending DATA to {}'.format(myActSock.getpeername()[0]))
-                        self.logger.debug('sending DATA to {}'.format(myActSock.getpeername()[0]))
                     
 
-                    except err as Exception:
-                        self._proto.addEntry('ERROR   ','While sending to Socket : {}'.format(err))
-                        self.stop('While sending to Socket : {}'.format(err))
-                    
-                else:
-                    pass
-                    #self._proto.addEntry('INFO    ','No Data for writable Socket : {}'.format(myActSock))
-            '''
             for myActSock in exceptional:
                     self._proto.addEntry('ERROR   ','Exception on Socket : {}'.format(myActSock))
                     self.stop("Exception from Socket : {}".format(myActSock))
@@ -496,14 +419,13 @@ class ProxySocket(threading.Thread):
                     if self.debug_level > 5:
                         self.Server_Block_Length.append(len(serverblock))
                         self._proto.addEntry('INFO (P)','Block-Length for Read-Server: {}'.format(len(serverblock)))
-                    #if len(serverblock) > 16384:
+
                 except:
                     pass
                 
                 try:
                     self.proxied_bytes += len(serverblock)
-                    #self.sh.AlexaCamProxy4P3.cams.Cams[self.actCam.proxied_Url].proxied_bytes += len(serverblock)
-                    #self.logger.error("added proxied bytes")
+
                 except Exception as err:
                     self.logger.error("Server-Block inconsistent")
                     self._proto.addEntry('INFO    ',"Server-Block inconsistent during adding proxied bytes")
@@ -667,10 +589,6 @@ class ProxySocket(threading.Thread):
                 if not self.Credentials_Checked:
                     ForbiddenResponse =self.CreateForbiddenResponse().encode()
                     ForbiddenResponse = self._inject_sequence_no(ForbiddenResponse,self.client_last_Cseq)
-                    #self.client.sendall(ForbiddenResponse)
-                    #self.message_queues[self.client].append(ForbiddenResponse)
-                    #self.message_queues[self.client].put(ForbiddenResponse)
-                    #self.Sender.message_queues[self.client].put(ForbiddenResponse)
                     self.send_immediate(self.client, ForbiddenResponse)
                     if self.debug_level > 5:
                         self.logger.debug(self.CreateForbiddenResponse())
@@ -731,7 +649,7 @@ class ProxySocket(threading.Thread):
                                     self.Sender.server = self.server
                                     self.Sender.message_queues[self.server] = queue.Queue()
                                     self._proto.addEntry('INFO    ',"Complete setting up Server-Connection")
-                                    #self.message_queues[self.server] = queue.Queue()
+
                                     self.server_url = True
                                     if self.debug_level > 5:
                                         self.logger.debug("ProxyCam4AlexaP3: connected to Camera")
@@ -789,24 +707,15 @@ class ProxySocket(threading.Thread):
                     if "\r\n" in clientblock.decode():
                         if self.debug_level > 5:
                             self._proto.addEntry('INFO P>S',clientblock.decode())
-                        #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(clientblock.decode())))
 
 
                     self.send_immediate(self.server, clientblock)
-                    #self.message_queues[self.server].put(clientblock)
 
                     
                     
             except err as Exception:
                 self.logger.debug("Error while server-send {}".format(err))
 
-            '''                
-            if 'TEARDOWN' in clientblock.decode():
-                clientblock = self._inject_sequence_no(clientblock, self.server_last_Cseq)
-                clientblock = self.InjectRealUrl(clientblock)
-                self.send_immediate(self.server, clientblock)
-                self.stop('TEARDOWN')
-            '''
 
         else:
             self.stop('Client-hang up')
@@ -1252,10 +1161,23 @@ class ProxySocket(threading.Thread):
                     continue
                 if 'm=' in line:
                     set_del_Audio = False
+
+            #********************************
+            # Stream-Modifiers
+            #********************************
             if self.actCam != None:         
                 if '/del_audio' in self.actCam.alexa_cam_modifiers.lower() and "m=audio" in line.lower():
                     set_del_Audio = True
                     continue
+
+            if self.actCam != None:         
+                if '/del_framerate' in self.actCam.alexa_cam_modifiers.lower() and "framerate" in line.lower():
+                    continue
+
+            if self.actCam != None:         
+                if '/del_framesize' in self.actCam.alexa_cam_modifiers.lower() and "framesize" in line.lower():
+                    continue
+            
             if ('m=video' in line):
                 if ('/mod_audio'):
                     myNewArray.append(line)
