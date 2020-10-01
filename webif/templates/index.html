@@ -78,8 +78,8 @@ input:checked + .slider:before {
 {% set tabcount = 4 %}
 {% set tab1title = 'Settings / Cam-Info' %}
 {% set tab2title = 'Communication-Log' %}
-{% set tab3title = 'active Camera Thread´s' %}
-{% set tab4title = 'SSL Certificate Info´s' %}
+{% set tab3title = 'active Camera Threads' %}
+{% set tab4title = 'SSL Certificate Info' %}
 
 
 {% block headtable %}
@@ -91,16 +91,16 @@ input:checked + .slider:before {
 		</tr>
 
 		<tr>
-			<td class="py-1" style="width: 40%;"><strong>allowed IP's</strong></td>
+			<td class="py-1" style="width: 40%;"><strong>{{ _('allowed IP') }}</strong></td>
 			<td align="right" class="py-1">{{ publicIP }}</td>
 		</tr>
 		<tr>
-			<td class="py-1" style="width: 40%;"><strong>Proxy-Credentials</strong></td>
-			<td align="right" style="width: 60%;" class="py-1">{{ proxyCredentials }}</td>
+			<td class="py-1" style="width: 40%;"><strong>{{ _('Proxy-Credentials') }}</strong></td>
+			<td id = "proxyCredentials" align="right" style="width: 60%;" class="py-1">{{ proxyCredentials }}</td>
 		</tr>
 		<tr>
-			<td class="py-1" style="width: 40%;"><strong>Proxy-Authorization</strong></td>
-			<td align="right" style="width: 60%;" class="py-1">{{ proxy_auth_type }}</td>
+			<td class="py-1" style="width: 40%;"><strong>{{ _('Proxy-Authorization') }}</strong></td>
+			<td id = "actAuthorization" align="right" style="width: 60%;" class="py-1">{{ proxy_auth_type }}</td>
 		</tr>
 
 	</tbody>
@@ -120,10 +120,10 @@ input:checked + .slider:before {
 {% block bodytab1 %}
 <!--Start of Settings-->
 <div class="table-responsive" style="margin-left: 2px; margin-right: 2px; margin-bottom: 5px;margin-top: 5px;" class="row">
-<strong><font size="+2"> Settings</font></strong>
+<strong><font size="+2"> {{ _('Settings') }}</font></strong>
 	<table class="table table-striped table-hover">
 			<tr style="height: 10px;font-size: 12px" valign = "middle">
-				<td style="width: 10%; vertical-align:middle;align:left">Credentials:</td>
+				<td style="width: 10%; vertical-align:middle;align:left">{{ _('Credentials:') }}</td>
 				<td style="width: 15%" valign = "middle" align="left">
 			          <input type="input" style="margin-bottom: 1px; margin-left: 5px; width: 100%;font-size: 12px" class="form-control" name="txtUser" id="txtUser" placeholder="{{ _('Proxy-User') }}" value="">			
 				</td>
@@ -133,41 +133,43 @@ input:checked + .slider:before {
 				<td style="width: 10%; vertical-align:middle;align:left">
 				<div class="custom-control custom-checkbox" style =" vertical-align:middle;align:left">
 				    <input type="checkbox" class="custom-control-input" id="store_2_config" name="store_2_config">
-				    <label class="custom-control-label" for="store_2_config">Store to Config</label>
+				    <label class="custom-control-label" for="store_2_config">{{ _('Store to Config') }}</label>
 				</div>
                 </td>
                 <td style="width:10%">
 			          <button type="button" onclick="BtnEncode()"style="margin-left : 5px" class="btn btn-shng btn-sm" value="btnEncode" id="btnEncode">&nbsp;{{ _('Encode') }}</button>
                 <td>
-				<td style="width: 10%; vertical-align:middle;align:left">encoded Cred.:
+				<td style="width: 10%; vertical-align:middle;align:left">{{ _('encoded Cred.:') }}
                 </td>
                 <td style="width: 45%; vertical-align:middle;align:left">
 			          <input type="input" style="margin-bottom: 1px; margin-left: 5px; width: 100%;font-size: 12px" class="form-control" name="txtEncoded" id="txtEncoded" placeholder="{{ _('Encoded Credentials') }}" value="">			
 				</td>
 			</tr>
             <tr>
-				<td style="width: 10%" valign = "middle" align="left"><strong>Result :</strong></td>
-				<td colspan="7" style="width: 75%;margin-top: 5px;margin-bottom: 5px; margin-left : 5px;margin-right: 5px; height : 50px;font-size: 12px;" valign = "middle" align="left">
+				<td style="width: 10%" valign = "middle" align="left"><strong>{{ _('Result :') }}</strong></td>
+				<td colspan="7" style="width: 75%;margin-top: 5px;margin-bottom: 5px; margin-left : 5px;margin-right: 5px; height : 60px;font-size: 12px;" valign = "middle" align="left">
 
 					<textarea type="input" rows="5" style="width: 100%;height: 100%;font-size: 12px;" class="form-control" name="txt_Result" id="txt_Result" placeholder="{{ _('...') }}" disabled >{{ txt_Result }}</textarea>
 
 				</td>
 			</tr>
             <tr>
-				<td colspan="2" style="width: 10%; vertical-align:middle" align="left"><strong>Video-Buffer-Size :</strong></td>
+				<td colspan="2" style="width: 10%; vertical-align:middle" align="left"><strong>{{ _('Video-Buffer-Size :') }}</strong></td>
 				<td style="width: 15%" valign = "middle" align="left">
-			          <input type="input" style="margin-bottom: 1px; margin-left: 5px; width: 100%;font-size: 12px" class="form-control" name="txtUser" id="txtUser" placeholder="{{ _('bytes') }}" value={{ video_buffer }}>			
+			          <input type="input" style="margin-bottom: 1px; margin-left: 5px; width: 100%;font-size: 12px" class="form-control" name="txtVideoBuffer" id="txtVideoBuffer" placeholder="{{ _('bytes') }}" value={{ video_buffer }}>			
 				</td>
-				<td colspan="2" style="width: 10%; vertical-align:middle" valign = "middle" align="left"><strong>Authorization :</strong></td>
+				<td colspan="2" style="width: 10%; vertical-align:middle" valign = "middle" align="left"><strong>{{ _('Authorization :') }}</strong></td>
                 <td>
-                    <select name="authorization_1" id="authorization_1" style="width:100px; vertical-align:middle">
+                    <select name="authorization_1" id="authorization_1" style="width:100px; vertical-align:middle" value ={{ proxy_auth_type }}>
+                      <option value={{ proxy_auth_type }} selected={{ proxy_auth_type }} disabled hidden> 
+                            {{ proxy_auth_type }}
                       <option value="NONE">NONE</option>
                       <option value="BASIC">BASIC</option>
                       <option value="DIGEST">DIGEST</option>
                     </select>
                 </td>
         <td colspan="2">
-        	<button id="btn_clear_proto_states" class="btn btn-shng btn-sm" name="btn_clear_proto_states" value="on" onclick="CommitValues(this.name)"><i class="fas fa-satellite-dish"></i>&nbsp;&nbsp;&nbsp;Commit Changes&nbsp;</button>
+        	<button id="btn_clear_proto_states" class="btn btn-shng btn-sm" name="btn_clear_proto_states" value="on" onclick="CommitValues(this.name)"><i class="fas fa-satellite-dish"></i>&nbsp;&nbsp;&nbsp;{{ _('Commit Changes') }}&nbsp;</button>
         </td>
             </tr>
 
@@ -184,12 +186,12 @@ input:checked + .slider:before {
 				<tr>
 					<th>{{ _('Alexa-Item') }}</th>
                         		<th style="width: 200;"><font size="-1">{{ _('Proxy-URL') }}</th>
-					<th style="width: 200;"><font size="-1">{{ 'Real-URL´s' }}</th>
+					<th style="width: 200;"><font size="-1">{{ _('Real-URL') }}</th>
 					<th style="width:50px;text-align:center"><font size="-1">MB proxied total</th>
-					<th style="width:200px;text-align:center"><font size="-1">last Session</th>
-					<th style="width:200px;text-align:center"><font size="-1">Stream-Modifiers</th>
-					<th style="width:100px;text-align:center"><font size="-1">last Session duration</th>
-					<th style="width:50px;text-align:center"><font size="-1" style="width:100px"">Sessions total</th>
+					<th style="width:200px;text-align:center"><font size="-1">{{ _('last Session') }}</th>
+					<th style="width:200px;text-align:center"><font size="-1">{{ _('Stream-Modifiers') }}</th>
+					<th style="width:100px;text-align:center"><font size="-1">{{ _('last Session duration') }}</th>
+					<th style="width:50px;text-align:center"><font size="-1" style="width:100px"">{{ _('Sessions total') }}</th>
 					</tr>
 			</thead>
 			<tbody>
@@ -220,7 +222,7 @@ input:checked + .slider:before {
 			<thead>
 				<tr>
 					<th>{{ _('Alexa-Item') }}</th>
-					<th style="width: 200;">{{ 'Real-URL' }}</th>
+					<th style="width: 200;">{{ _('Real-URL') }}</th>
 					</tr>
 			</thead>
 			<tbody>
@@ -242,12 +244,12 @@ input:checked + .slider:before {
 	<tbody>
     <tr>
         <td>
-        	<button id="btn_clear_proto_states" class="btn btn-shng btn-sm" name="btn_clear_proto_states" value="on" onclick="DeleteProto(this.id)"><i class="fas fa-trash-alt"></i>&nbsp;&nbsp;&nbsp;delete Protocol&nbsp;</button>
+        	<button id="btn_clear_proto_states" class="btn btn-shng btn-sm" name="btn_clear_proto_states" value="on" onclick="DeleteProto(this.id)"><i class="fas fa-trash-alt"></i>&nbsp;&nbsp;&nbsp;{{ _('delete Protocol') }}&nbsp;</button>
         </td>
         <td>
             <div class="custom-control custom-checkbox" style =" vertical-align:middle;align:left">
                 <input type="checkbox" class="custom-control-input" id="proto_states_check" name="proto_states_check">
-                <label class="custom-control-label" for="proto_states_check">Auto Update ( 2 Sek.)</label>
+                <label class="custom-control-label" for="proto_states_check">{{ _('Auto Update ( 2 sec.)') }}</label>
             </div>
         </td>
     </tr>
@@ -303,7 +305,7 @@ $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
                     <div class="col" style="max-width: 50%;">
                         <div class="card">
                             <div class="card-header p-1 shng_heading">
-                                <a class="float-sm-right" href="#" onclick="reloadThreads();" title="{{ _('Neu Laden', 'button') }}"><span id="refresh-element" class="fas fa-sync"></span></a>
+                                <a class="float-sm-right" href="#" onclick="reloadThreads();" title="{{ _('Neu Laden' ) }}"><span id="refresh-element" class="fas fa-sync"></span></a>
                                 <strong>{{ _('Threads existing ...') }}</strong>
                             </div>
                             <div class="card-body p-1" style="overflow-y: scroll">
@@ -327,7 +329,7 @@ $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
 				<tr>
 
 				<strong align="left">{{ _('Thread-Details') }}</strong>
-                 <a class="float-sm-right" align="right" href="#" onclick="SelectListItem(actThreadName);" title="{{ _('Neu Laden', 'button') }}"><span id="refresh-element_details" class="fas fa-sync"></span></a>
+                 <a class="float-sm-right" align="right" href="#" onclick="SelectListItem(actThreadName);" title="{{ _('Neu Laden' ) }}"><span id="refresh-element_details" class="fas fa-sync"></span></a>
 
                             </tr>
                             </table>

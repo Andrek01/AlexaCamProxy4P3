@@ -1,3 +1,115 @@
+var user = ""
+var pwd = ""
+//*******************************************
+// Button Handler committing changes
+//*******************************************
+
+function CommitValues(result)
+{
+      VideoBuffer = document.getElementById("txtVideoBuffer").value;
+      authorization_1 = document.getElementById("authorization_1").value;
+
+	$.ajax({
+		url: "commit.html",
+		type: "GET",
+		data: { 
+		           	VideoBuffer : VideoBuffer,
+			        authorization_1 : authorization_1
+		      },
+		contentType: "application/json; charset=utf-8",
+		success: function (response) {
+				ValidateResponse(response);
+		},
+		error: function () {
+			document.getElementById("txt_Result").innerHTML = "Error while Communication !";
+		}
+	});
+  return
+}
+
+//*************************************************************
+// ValidateResponse -checks the commitment of the settings
+//*************************************************************
+
+function ValidateResponse(response)
+{
+var myResult = ""
+var temp = ""
+var objResponse = JSON.parse(response)
+for (x in objResponse)
+    {
+         if (x == "0")
+     	{
+            document.getElementById("actAuthorization").textContent = authorization_1;	        
+	    }
+         else
+	    {
+	      temp = temp + objResponse[x]+"\n";
+	    }
+    }
+
+document.getElementById("txt_Result").value = temp;
+}
+
+//*************************************************************
+// ValidateEncodeResponse -checks the login-button
+//*************************************************************
+
+function ValidateEncodeResponse(response)
+{
+var myResult = ""
+var temp = ""
+var objResponse = JSON.parse(response)
+for (x in objResponse)
+    {
+     if (x == "0")
+ 	{
+	  document.getElementById("txtEncoded").value = objResponse[x].substr(8);	  
+	}
+     else
+	{
+	  temp = temp + objResponse[x]+"\n";
+	}
+    }
+
+document.getElementById("txt_Result").value = temp;
+if (document.getElementById("store_2_config").checked == true)
+ {
+    document.getElementById("proxyCredentials").textContent = user+":"+pwd;
+  }
+
+}
+
+//*******************************************
+// Button Handler for Encoding credentials
+//*******************************************
+
+function BtnEncode(result)
+{
+      user = document.getElementById("txtUser").value;
+      pwd = document.getElementById("txtPwd").value;
+      store2config = document.getElementById("store_2_config").checked;
+      encoded=user+":"+pwd;
+      encoded=btoa(encoded);
+      //document.getElementById("txtEncoded").value = encoded;
+	$.ajax({
+		url: "store_credentials.html",
+		type: "GET",
+		data: { encoded : encoded,
+			user : user,
+		   	pwd : pwd,
+			store_2_config : store2config
+		      },
+		contentType: "application/json; charset=utf-8",
+		success: function (response) {
+				ValidateEncodeResponse(response);
+		},
+		error: function () {
+			document.getElementById("txt_Result").innerHTML = "Error while Communication !";
+		}
+	});
+  return
+}
 
 //*************************************************************
 // check Auto-Updates for protocols
@@ -5,7 +117,9 @@
 setInterval(Checkupdate4Protocolls, 2000);
 
 
-
+//*************************************************************
+// delete protocol
+//*************************************************************
 
 function DeleteProto(btn_Name)
 {
@@ -105,6 +219,9 @@ function actProto(response,proto_Name)
     }
 }
 
+//*************************************************************
+// resize the Thread-Tables
+//*************************************************************
 function resizeItemTree() {
     var browserHeight = window.innerHeight;
     offsetTop = $('#threads').offset().top;
@@ -115,7 +232,9 @@ function resizeItemTree() {
     $('#thread_details').css("cssText","overflow: auto scroll; max-height: 1000px;")
 }
 resizeItemTree();
-
+//*************************************************************
+// update the Thread tables
+//*************************************************************
 function BuildThreads(result)
 {
     var temp ='';
@@ -131,7 +250,9 @@ function BuildThreads(result)
     $('#threads').html(temp);
 }
 
-
+//*************************************************************
+// reload Threads
+//*************************************************************
 function reloadThreads()
 {
         $('#refresh-element').addClass('fa-spin');
@@ -151,6 +272,9 @@ function reloadThreads()
     
 }
 
+//*************************************************************
+// show Thread details
+//*************************************************************
 
 function BuildThreadDetails(result)
 {

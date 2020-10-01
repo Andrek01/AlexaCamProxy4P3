@@ -24,7 +24,7 @@
 import os
 import sys
 import time
-
+import base64
 
 from datetime import datetime
 from builtins import Exception
@@ -232,50 +232,6 @@ class TestSocket(threading.Thread):
                             #self._proto.addEntry('FLOW    ','Reading IN Length : {}'.format(len(incoming_block)) )
                             #self.message_queues[wrappedSocket].append(incoming_block)
                             self.Sender.message_queues[wrappedSocket].put(incoming_block)                                
-                    
-                    '''
-                    for myActSock in writable:
-                        if len(self.message_queues[myActSock]) >= 1:
-                            try:
-                                self._proto.addEntry('FLOW    ','Writing')
-                                next_msg = b''
-                                next_msg = self.message_queues[myActSock][0]
-                                del self.message_queues[myActSock][0]
-                                self.queue_counter +=1
-                                if (self.queue_counter >= 20):
-                                    self.queue_counter = 0
-                                    self._proto.addEntry('INFO    ','Queue-Length-IN : {} / Queue-Length-Out : {}'.format(len(self.message_queues[self.incoming_socket]),len(self.message_queues[wrappedSocket])))
-                                    
-                                if myActSock == wrappedSocket:
-                                    myRcv = 'T>P' 
-                                    
-                                else:
-                                    myRcv = 'T>C'
-                                
-                                self._proto.addEntry('INFO    ','Send-Message to : {}'.format(myActSock))
-                                self._proto.addEntry('INFO    ','Block-Length for Writing: {}'.format(len(next_msg)))
-                                #myActSock.sendall(next_msg)
-                                while len(next_msg) > 0:
-                                    sent = myActSock.send(next_msg)
-                                    if sent < len(next_msg):
-                                        next_msg = next_msg[sent:]
-                                    else:
-                                        break
-                                #self._proto.addEntry('INFO    ',next_msg.decode())
-                                #self._proto.addEntry('INFO    ',"Block-length : {}".format(len(next_msg.decode())))
-                                self._proto.addEntry('INFO '+myRcv,'sending DATA to {}'.format(myActSock.getpeername()[0]))
-                                self.logger.debug('sending DATA to {}'.format(myActSock.getpeername()[0]))
-                            
-        
-                            except err as Exception:
-                                self._proto.addEntry('ERROR   ','While sending to Socket : {}'.format(err))
-                                continue
-                        else:
-                            pass
-                            #self._proto.addEntry('INFO    ','No Data for writable Socket : {}'.format(myActSock))
-
-
-                    '''
                     for myActSock in exceptional:
                         wrappedSocket.close()
                         wrappedSocket = None
@@ -673,7 +629,58 @@ class WebInterface(SmartPluginWebIf):
         self.plugin = plugin
         self.tplenv = self.init_template_environment()
         self.items = Items.get_instance()
-
+    
+    @cherrypy.expose
+    def store_credentials_html(self, encoded='', pwd = '', user= '', store_2_config=None):
+        txt_Result = []
+        myCredentials = user+':'+pwd
+        byte_credentials = base64.b64encode(myCredentials.encode('utf-8'))
+        encoded = byte_credentials.decode("utf-8")
+        txt_Result.append("encoded:"+encoded) 
+        txt_Result.append("Encoding done")
+        conf_file=self.plugin.sh.get_basedir()+'/etc/plugin.yaml'
+        if (store_2_config == 'true'):
+            new_conf = ""
+            with open (conf_file, 'r') as myFile:
+                for line in myFile:
+                    if line.find('proxy_credentials') > 0:
+                        line = '    proxy_credentials: '+encoded+ "\r\n"
+                    new_conf += line 
+            myFile.close()         
+            txt_Result.append("replaced credentials in temporary file")
+            with open (conf_file, 'w') as myFile:
+                for line in new_conf.splitlines():
+                    myFile.write(line+'\r\n')
+            myFile.close()
+            txt_Result.append("stored new config to filesystem")
+            txt_Result.append("Please reload page to refresh Links for Testsockets")
+        return json.dumps(txt_Result)
+    
+    @cherrypy.expose
+    def commit_html(self, VideoBuffer='', authorization_1= ''):
+        txt_Result = []
+        conf_file=self.plugin.sh.get_basedir()+'/etc/plugin.yaml'
+        new_conf = ""
+        with open (conf_file, 'r') as myFile:
+            for line in myFile:
+                if line.find('video_buffer') > 0:
+                    line = '    video_buffer: '+VideoBuffer+ "\r\n"
+                if line.find('proxy_auth_type') > 0:
+                    line = '    proxy_auth_type: '+authorization_1+ "\r\n"
+                new_conf += line 
+        myFile.close()         
+        txt_Result.append("replaced credentials in temporary file")
+        with open (conf_file, 'w') as myFile:
+            for line in new_conf.splitlines():
+                myFile.write(line+'\r\n')
+        myFile.close()
+        txt_Result.append("stored new config to filesystem")
+        self.plugin.service.proxy_auth_type = authorization_1
+        self.plugin.proxy_auth_type =authorization_1
+        
+        self.plugin.service.BUFF_SIZE_SERVER = VideoBuffer
+        self.plugin.video_buffer = VideoBuffer
+        return json.dumps(txt_Result)
 
     @cherrypy.expose
     def thread_list_json_html(self):
@@ -879,14 +886,17 @@ class WebInterface(SmartPluginWebIf):
         
         # Show the public IP
         try:
-            myPublicIP = self.plugin.service.myIP
             if (self.plugin.only_allow_own_IP):
-                SubNetTest = self.plugin.service.myLan.split(".")
-                myLan = self.plugin.service.myLan
-                SubNetTest = len(SubNetTest)
-                for i in range(SubNetTest-2,2):
-                    myLan += '.*'
-                myPublicIP += ' / 127.0.0.1 / '+myLan
+                myPublicIP = self.plugin.service.myIP
+                if (self.plugin.only_allow_own_IP):
+                    SubNetTest = self.plugin.service.myLan.split(".")
+                    myLan = self.plugin.service.myLan
+                    SubNetTest = len(SubNetTest)
+                    for i in range(SubNetTest-2,2):
+                        myLan += '.*'
+                    myPublicIP += ' / 127.0.0.1 / '+myLan
+            else:
+                myPublicIP = '*'
         except Exception as err:
             print("Error while looking for public IP :",err )
         try:

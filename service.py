@@ -68,15 +68,22 @@ class ThreadedServer(threading.Thread):
                 myLine = line
                 break
     
-        print (myLine)
         fields=myLine.split(" ")
-        for field in fields:
-            if "mask" in field.lower():
-                print (field)
-                strMask = field.split(":")
-                print (strMask[1])
-                myNetMask = strMask[1]
-                break
+        counter = 0
+        try:
+            for field in fields:
+                if "mask" in field.lower() and ':' in field:
+                    strMask = field.split(":")
+                    myNetMask = strMask[1]
+                    break
+                if "mask" in field.lower() and not ':' in field:
+                    myNetMask = fields[counter+1]
+                    break
+                counter += 1
+            self._proto.addEntry('INFO    ',"detected Netmask - set Netmask to {}".format(myNetMask))
+        except:
+            myNetMask = "255.255.255.0"
+            self._proto.addEntry('WARNING ',"Not able to detect netmask -  set Netmask to {}".format(myNetMask))
     
         myCount = myNetMask.split("255.")
     
@@ -912,6 +919,9 @@ class ProxySocket(threading.Thread):
             
         if self.debug_level > 5:        
             self._proto.addEntry('INFO    ',"found Method : {}".format(PropValues['method']))                
+        if self.debug_level > 5 and "OPTIONS" in PropValues['method']:
+            self._proto.addEntry('INFO    ',"changed method from : {} to : {}".format(PropValues['method'],'DESCRIBE'))
+            PropValues['method'] = 'DESCRIBE'
         # no Authorization found
         if len(line) <= 5:
             return False
@@ -1177,7 +1187,14 @@ class ProxySocket(threading.Thread):
             if self.actCam != None:         
                 if '/del_framesize' in self.actCam.alexa_cam_modifiers.lower() and "framesize" in line.lower():
                     continue
-            
+            if self.actCam != None:
+                if '/del_xaccept' in   self.actCam.alexa_cam_modifiers.lower() and 'x-accept' in line.lower():
+                    continue
+
+            if self.actCam != None:
+                if '/del_cache-control' in   self.actCam.alexa_cam_modifiers.lower() and 'cache-control' in line.lower():
+                    continue
+                
             if ('m=video' in line):
                 if ('/mod_audio'):
                     myNewArray.append(line)
@@ -1197,11 +1214,14 @@ class ProxySocket(threading.Thread):
             if ("CSEQ" in line.upper()):
                 line ="CSeq: " + str(act_sequence_no) + " "
             
-            if ("Range: npt=0.000-" in line):
-                line ='Range: npt=now-'
+            if self.actCam != None:         
+                if '/mod_ntp' in self.actCam.alexa_cam_modifiers.lower():
+                    if ("Range: npt=0.000-" in line):
+                        line ='Range: npt=now-'
+                    if ("a=range:npt=0-" in line):
+                        line ='a=npt=now-'
             
-            if ("a=range:npt=0-" in line):
-                line ='a=npt=now-'
+
             
                  
             if ("CONTENT-LENGTH" in line.upper()):
@@ -1210,6 +1230,10 @@ class ProxySocket(threading.Thread):
             
             myNewArray.append(line)
         
+        if self.actCam != None:
+                if '/add_crlf' in self.actCam.alexa_cam_modifiers.lower():
+                    myNewArray.append('\r\n')
+                
         myNewArray = myNewArray[:-1]
         for line in myNewArray:
             myNewBlock += line +"\r\n"
