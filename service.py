@@ -26,7 +26,7 @@ from .proxy_handler import Sender
 
 
 class ThreadedServer(threading.Thread):
-    def __init__(self,Proto, logger,port, video_buffer,cert_path,cert_path_key, Cams, ClientThreads,proxyUrl,proxy_credentials,proxy_auth_type,only_allow_own_IP,sh_instance):
+    def __init__(self,Proto, logger,port, video_buffer,cert_path,cert_path_key, Cams, ClientThreads,proxyUrl,proxy_credentials,proxy_auth_type,only_allow_own_IP,sh_instance,allowed_IPs):
         threading.Thread.__init__(self)
         self.sh = sh_instance
         self.logger = logger
@@ -50,6 +50,7 @@ class ThreadedServer(threading.Thread):
         self.proxy_auth_type=proxy_auth_type
         self._proto = Proto
         self.only_allow_own_IP = only_allow_own_IP
+        self.allowed_IPs = allowed_IPs
         self.myLan = self._getmyLan()
         
         
@@ -100,7 +101,15 @@ class ThreadedServer(threading.Thread):
     
         return myLan
 
-            
+    def Check_allowed_IPs(self, _requestIP):
+        myIPs = self.allowed_IPs.split(';')
+        for IP in myIPs:
+            actIP = IP
+            while ('.*' in actIP):
+                actIP = actIP.replace('.*','')
+            if (actIP in _requestIP):
+                return true
+        return false
 
     def GetMyIP(self, myURL):
         proc = Popen(['ping',myURL,'-c 1'], stdout=PIPE, stderr=PIPE)
@@ -164,7 +173,7 @@ class ThreadedServer(threading.Thread):
                     reqAdress = None
                     self.myIP = self.GetMyIP(self.proxyUrl)
                     reqAdress = address[0]
-                    if self.myIP != reqAdress and reqAdress != "127.0.0.1" and reqAdress.find(self.myLan) != 0:
+                    if self.myIP != reqAdress and reqAdress != "127.0.0.1" and reqAdress.find(self.myLan) != 0 and self.Check_allowed_IPs(reqAdress) == False:
                         self._proto.addEntry('WARNING ',"Request from - {} - Only own IP's allowed - Connection refused - closed Socket ".format(reqAdress))                        
                         client.shutdown(socket.SHUT_RDWR)
                         client.close()

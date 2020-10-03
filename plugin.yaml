@@ -73,3 +73,9 @@ parameters:
         description:
             de: 'legt fest ob nur Zugriffe von der eigenen öffentlich IP, dem eigenen LAN und Local-Host zulässig sind'
             en: 'if true only Access from the own public IP, the LAN and the local host is allowed'
+    allowed_IPs: 
+        type: str
+        default: true
+        description:
+            de: 'diese Einstellung wird in einem gerouteten (Heim)Netzwerk benötigt. Es werden hier (Semikolon getrennt) die erlaubten IP´s eingetragen. Wildcards sind erlaubt Beispiel: 192.168.*.*'
+            en: 'Here you can enter the allowed IP in routed (Home)Network, please enter the allowed IP´s separated by semicolon. Wildcards are allowed example : 192.168.*.*'            

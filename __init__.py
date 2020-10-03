@@ -34,7 +34,6 @@ from datetime import timedelta
 
 
 
-
 from lib.module import Modules
 from lib.model.smartplugin import *
 from lib.item import Items
@@ -338,10 +337,11 @@ class AlexaCamProxy4P3(SmartPlugin):
         self.video_buffer = self.get_parameter_value('video_buffer')
         self.port = self.get_parameter_value('port')
         self.only_allow_own_IP = self.get_parameter_value('only_allow_own_IP')
+        self.allowed_IPs = self.get_parameter_value('allowed_IPs')
         self._proto = protocoll()
         self.cams = CamDevices()
         self.ClientThreads = []
-        self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.proxy_credentials,self.proxy_auth_type, self.only_allow_own_IP,self.sh)
+        self.service = ThreadedServer(self._proto,self.logger, self.port, self.video_buffer, self.PATH_CERT, self.PATH_PRIVKEY,self.cams,self.ClientThreads, self.proxyUrl,self.proxy_credentials,self.proxy_auth_type, self.only_allow_own_IP,self.sh,self.allowed_IPs)
         self.service.name = 'AlexaCamProxy4P3-Handler'
         self.TestSocket = None
 
@@ -894,7 +894,7 @@ class WebInterface(SmartPluginWebIf):
                     SubNetTest = len(SubNetTest)
                     for i in range(SubNetTest-2,2):
                         myLan += '.*'
-                    myPublicIP += ' / 127.0.0.1 / '+myLan
+                    myPublicIP += ' / 127.0.0.1 / '+myLan+'/'+self.plugin.allowed_IPs
             else:
                 myPublicIP = '*'
         except Exception as err:
